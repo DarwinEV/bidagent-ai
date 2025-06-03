@@ -170,7 +170,7 @@ def analyze_webpage_and_determine_action(
     return analysis_prompt
 
 
-search_results_agent = Agent(
+bid_search_agent = Agent(
     model=constants.MODEL,
     name="bid_search_agent",
     description="Search procurement websites like SAM.gov or state portals to find and return "
