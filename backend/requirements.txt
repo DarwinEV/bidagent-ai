@@ -17,5 +17,5 @@ google-cloud-aiplatform==1.92.0
 google-genai==1.14.0
 gitpython==3.1.40
 google-adk==0.5.0
-selenium
-pillow
+selenium==4.33.0
+pillow==11.2.1
