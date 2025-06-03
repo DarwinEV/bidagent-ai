@@ -1,3 +1,19 @@
+"""
+This module defines a Retrieval Augmented Generation (RAG) agent for interacting with Vertex AI's document corpora.
+
+Key functionalities:
+- Query document corpora to retrieve relevant information.
+- List all available document corpora.
+- Create new corpora for organizing documents.
+- Add new documents (e.g., Google Drive URLs) to existing corpora.
+- Retrieve detailed metadata and statistics about specific corpora.
+- Delete specific documents from a corpus.
+- Delete entire corpora when they are no longer needed.
+
+The agent uses the Gemini 2.5 Flash model for optimal performance with RAG operations and provides a structured interface for managing and querying document corpora. 
+It is designed to assist users in efficiently organizing and retrieving information.
+"""
+
 from google.adk.agents import Agent
 
 from .tools.add_data import add_data
@@ -23,7 +39,6 @@ root_agent = Agent(
         delete_document,
     ],
     instruction="""
-    # 🧠 Vertex AI RAG Agent
 
     You are a helpful RAG (Retrieval Augmented Generation) agent that can interact with Vertex AI's document corpora.
     You can retrieve information from corpora, list available corpora, create new corpora, add new documents to corpora, 

@@ -1,0 +1,25 @@
+# Byte-compiled / cache files
+__pycache__
+*.py[cod]
+.mypy_cache/
+.pytest_cache/
+*.cover
+.coverage
+Procfile
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Flask instance folder (for config/secrets)
+instance/
+
+# Environment variables
+.env
+
+# VS Code editor settings
+.vscode/
+
+# macOS-specific files
+.DS_Store
