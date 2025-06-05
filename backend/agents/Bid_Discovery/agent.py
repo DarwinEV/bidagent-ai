@@ -20,7 +20,8 @@ FEATURES:
 
 from google.adk.agents.llm_agent import Agent
 from .shared_libraries import constants
-from .sub_agents.search_results.agent import search_results_agent
+from .sub_agents.search_results.agent import bid_search_agent
+from .sub_agents.rag_agent.agent import root_agent
 from . import prompt
 
 root_agent = Agent(
@@ -32,6 +33,7 @@ root_agent = Agent(
     # ],  
     instruction=prompt.ROOT_PROMPT,
     sub_agents=[
-        search_results_agent
+        bid_search_agent,
+        root_agent
     ],
 )
