@@ -15,19 +15,29 @@ from . import prompt
 
 warnings.filterwarnings("ignore", category=UserWarning)
 
-if not constants.DISABLE_WEB_DRIVER:
-    options = Options()
-    options.add_argument("--window-size=1920x1080")
-    options.add_argument("--verbose")
-    options.add_argument("user-data-dir=/tmp/selenium")
+driver = None
 
-    driver = selenium.webdriver.Chrome(options=options)
+
+def get_driver():
+    """Initializes and returns a singleton Chrome WebDriver instance."""
+    global driver
+    if driver is None and not constants.DISABLE_WEB_DRIVER:
+        print("🚀 Initializing new Chrome WebDriver instance...")
+        options = Options()
+        options.add_argument("--window-size=1920x1080")
+        options.add_argument("--verbose")
+        options.add_argument("user-data-dir=/tmp/selenium")
+        driver = selenium.webdriver.Chrome(options=options)
+    return driver
 
 
 def go_to_url(url: str) -> str:
     """Navigates the browser to the given URL."""
     print(f"🌐 Navigating to URL: {url}")  # Added print statement
-    driver.get(url.strip())
+    local_driver = get_driver()
+    if not local_driver:
+        return "WebDriver is disabled."
+    local_driver.get(url.strip())
     return f"Navigated to URL: {url}"
 
 
@@ -36,7 +46,10 @@ async def take_screenshot(tool_context: ToolContext) -> dict:
     timestamp = time.strftime("%Y%m%d-%H%M%S")
     filename = f"screenshot_{timestamp}.png"
     print(f"📸 Taking screenshot and saving as: {filename}")
-    driver.save_screenshot(filename)
+    local_driver = get_driver()
+    if not local_driver:
+        return {"status": "error", "message": "WebDriver is disabled."}
+    local_driver.save_screenshot(filename)
 
     image = Image.open(filename)
 
@@ -50,16 +63,22 @@ async def take_screenshot(tool_context: ToolContext) -> dict:
 
 def click_at_coordinates(x: int, y: int) -> str:
     """Clicks at the specified coordinates on the screen."""
-    driver.execute_script(f"window.scrollTo({x}, {y});")
-    driver.find_element(By.TAG_NAME, "body").click()
+    local_driver = get_driver()
+    if not local_driver:
+        return "WebDriver is disabled."
+    local_driver.execute_script(f"window.scrollTo({x}, {y});")
+    local_driver.find_element(By.TAG_NAME, "body").click()
+    return "Clicked at coordinates."
 
 
 def find_element_with_text(text: str) -> str:
     """Finds an element on the page with the given text."""
     print(f"🔍 Finding element with text: '{text}'")  # Added print statement
-
+    local_driver = get_driver()
+    if not local_driver:
+        return "WebDriver is disabled."
     try:
-        element = driver.find_element(By.XPATH, f"//*[text()='{text}']")
+        element = local_driver.find_element(By.XPATH, f"//*[text()='{text}']")
         if element:
             return "Element found."
         else:
@@ -73,9 +92,11 @@ def find_element_with_text(text: str) -> str:
 def click_element_with_text(text: str) -> str:
     """Clicks on an element on the page with the given text."""
     print(f"🖱️ Clicking element with text: '{text}'")  # Added print statement
-
+    local_driver = get_driver()
+    if not local_driver:
+        return "WebDriver is disabled."
     try:
-        element = driver.find_element(By.XPATH, f"//*[text()='{text}']")
+        element = local_driver.find_element(By.XPATH, f"//*[text()='{text}']")
         element.click()
         return f"Clicked element with text: {text}"
     except selenium.common.exceptions.NoSuchElementException:
@@ -91,9 +112,11 @@ def enter_text_into_element(text_to_enter: str, element_id: str) -> str:
     print(
         f"📝 Entering text '{text_to_enter}' into element with ID: {element_id}"
     )  # Added print statement
-
+    local_driver = get_driver()
+    if not local_driver:
+        return "WebDriver is disabled."
     try:
-        input_element = driver.find_element(By.ID, element_id)
+        input_element = local_driver.find_element(By.ID, element_id)
         input_element.send_keys(text_to_enter)
         return (
             f"Entered text '{text_to_enter}' into element with ID: {element_id}"
@@ -107,7 +130,10 @@ def enter_text_into_element(text_to_enter: str, element_id: str) -> str:
 def scroll_down_screen() -> str:
     """Scrolls down the screen by a moderate amount."""
     print("⬇️ scroll the screen")  # Added print statement
-    driver.execute_script("window.scrollBy(0, 500)")
+    local_driver = get_driver()
+    if not local_driver:
+        return "WebDriver is disabled."
+    local_driver.execute_script("window.scrollBy(0, 500)")
     return "Scrolled down the screen."
 
 
@@ -115,7 +141,10 @@ def get_page_source() -> str:
     LIMIT = 1000000
     """Returns the current page source."""
     print("📄 Getting page source...")  # Added print statement
-    return driver.page_source[0:LIMIT]
+    local_driver = get_driver()
+    if not local_driver:
+        return "WebDriver is disabled."
+    return local_driver.page_source[0:LIMIT]
 
 
 def analyze_webpage_and_determine_action(
