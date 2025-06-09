@@ -19,3 +19,4 @@ gitpython==3.1.40
 google-adk==0.5.0
 selenium==4.33.0
 pillow==11.2.1
+PyMuPDF==1.26.0

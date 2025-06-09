@@ -19,14 +19,14 @@ FEATURES:
 """
 
 from google.adk.agents.llm_agent import Agent
-from .shared_libraries import constants
+from ..shared_libraries import constants
 from .sub_agents.search_results.agent import bid_search_agent
-from .sub_agents.rag_agent.agent import root_agent as rag_agent
+from .sub_agents.rag_agent.agent import rag_agent
 from . import prompt
 
-root_agent = Agent(
-    name=constants.AGENT_NAME,
-    description=constants.DESCRIPTION,
+bid_discovery_manager = Agent(
+    name="bid_discovery_manager",
+    description="Manages the process of discovering and analyzing new bid opportunities.",
     model=constants.MODEL,
     # tools=[
     #     <specify_tool>,
