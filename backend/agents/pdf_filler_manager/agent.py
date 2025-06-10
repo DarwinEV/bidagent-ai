@@ -11,5 +11,7 @@ pdf_filler_manager = Agent(
     tools=[
         tools.list_pdf_form_fields,
         tools.fill_pdf_form_field,
+        tools.find_text_coordinates,
+        tools.create_and_fill_field,
     ],
 ) 

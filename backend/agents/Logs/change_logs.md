@@ -1,5 +1,70 @@
 # Change Log
 
+## [2024-06-07] - Refactored PDF Tools for Robustness
+
+### Objective
+Resolve persistent save errors with certain PDF types by refactoring the PDF creation tools to be more atomic and reliable.
+
+### Changes Made
+
+1.  **Replaced Fragile Tools**:
+    *   In `backend/agents/pdf_filler_manager/tools.py`, the `create_text_field` tool, which used a problematic incremental save, was removed.
+    *   A new, more robust `create_and_fill_field` tool was introduced. This tool handles both field creation and filling in a single, atomic operation, always saving to a new output file to avoid corruption and encryption issues.
+
+2.  **Simplified Agent Logic**:
+    *   The `PDF_FILLER_PROMPT` was updated to use the new, simpler workflow. The agent no longer needs to chain separate `create` and `fill` calls, reducing complexity and potential for error.
+    *   The agent's toolset in `agent.py` was updated to include the new `create_and_fill_field` tool and remove the old one.
+
+### Expected Result
+*   The `pdf_filler_manager` is now significantly more robust and should no longer fail on PDFs that are encrypted or have non-standard structures.
+*   The agent's logic is simpler and more reliable.
+*   The "save_inplace" and subsequent incremental save errors are resolved.
+
+---
+
+## [2024-06-07] - Patched PDF Field Creation Tool
+
+### Objective
+Fix the critical `AttributeError` in the `create_text_field` tool to enable the PDF creation workflow.
+
+### Changes Made
+
+1.  **Corrected Save Method**:
+    *   In `backend/agents/pdf_filler_manager/tools.py`, the incorrect `doc.save_inplace()` method call was replaced with the correct `doc.save(pdf_path, incremental=True)`.
+
+### Expected Result
+*   The `pdf_filler_manager` can now successfully create and save new text fields on a PDF without crashing.
+*   The stateful workflow, where the agent creates a field and then fills it, is now functional.
+*   The `AttributeError: 'Document' object has no attribute 'save_inplace'` error is resolved.
+
+---
+
+## [2024-06-07] - Enhanced PDF Filler with Field Creation
+
+### Objective
+Upgrade the `pdf_filler_manager` to intelligently create new form fields on non-interactive PDFs, enabling it to handle a wider range of documents.
+
+### Changes Made
+
+1.  **Upgraded Tools (`tools.py`)**:
+    *   Added `find_text_coordinates`: A new tool that can locate a specific string of text within a PDF and return its exact coordinates.
+    *   Added `create_text_field`: A new tool that programmatically adds a new, empty text field to a PDF at a specified location.
+
+2.  **Enhanced Agent Logic (`prompt.py`)**:
+    *   The `PDF_FILLER_PROMPT` was completely rewritten with a new, branching workflow.
+    *   The agent now first checks for existing fields. If none are found, it enters a "creation" mode.
+    *   In creation mode, the agent uses the new tools to find text labels (e.g., "Company Name:"), create a new text field next to them, and then immediately fill that field with the user's data.
+
+3.  **Updated Agent Definition (`agent.py`)**:
+    *   The new `find_text_coordinates` and `create_text_field` tools were added to the `pdf_filler_manager`'s toolset, making them available for use.
+
+### Expected Result
+*   The `pdf_filler_manager` is no longer limited to pre-existing form fields.
+*   It can now intelligently add and fill information on static, non-interactive PDF documents by finding text labels and creating fields on the fly.
+*   This significantly increases the agent's utility and the range of documents it can successfully automate.
+
+---
+
 ## [2024-06-07] - Implemented PDF Filler Manager
 
 ### Objective
