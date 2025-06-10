@@ -10,7 +10,7 @@ from PIL import Image
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 
-from ...shared_libraries import constants
+from ....shared_libraries import constants
 from . import prompt
 
 warnings.filterwarnings("ignore", category=UserWarning)
