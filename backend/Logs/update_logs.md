@@ -122,3 +122,5 @@ root_agent = Agent(
 - After collecting the information, the `bid_search_agent` will use its tools to open a browser tab and perform the search.
 - The user will no longer be asked for the same information multiple times.
 - The responsibility of each agent will be clearly separated.
+
+

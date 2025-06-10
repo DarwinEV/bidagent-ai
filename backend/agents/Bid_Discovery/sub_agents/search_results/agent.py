@@ -1,3 +1,9 @@
+# search_results/agent.py
+
+# this is the sub agent that search for bids
+# TO DO: NEED TO PASS IN THE BID SEARCH PARAMETERS LIKE KEYWORDS/SERVICES, NAICS CODES, GEPGRAPHIC FOCUS (DROPDOWN) AND PORTAL SELECTION
+# TO DO: NEED TO OBTAIN THE LIST OF BIDS BACK TO THE FRONTEND
+
 import time
 import warnings
 

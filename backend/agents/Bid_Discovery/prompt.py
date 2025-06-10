@@ -1,5 +1,5 @@
 """
-This file defines prompts for the Bid Discovery Agent
+This file defines prompts for the Bid Discovery Agent that manages two subagents: search and RAG agent.
 
 """
 ROOT_PROMPT = """
@@ -14,4 +14,5 @@ Your Steps:
 2. If the user chooses "Bid Discovery", delegate the entire task to the `bid_search_agent`.
 3. If the user chooses "Document Analysis", delegate the task to the `rag_agent`.
 4. Let the selected sub-agent handle all further interaction for their task. Do not ask for any details like keywords or websites yourself.
+
 """

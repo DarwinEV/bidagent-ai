@@ -1,13 +1,12 @@
-
 from flask import Blueprint
-from routes.auth_routes import auth_bp
-from routes.start_discovery import start_disc
-from routes.download_bid import download_bid
-from routes.fill_bid import fill_bid
-from routes.submit_bid import submit_bid
-from routes.get_bids import get_bids
-from routes.get_agent_status import agent_status
-from routes.analytics import analytics
+from backend.routes.auth_routes import auth_bp
+from backend.routes.start_discovery import start_disc
+from backend.routes.download_bid import download_bid
+from backend.routes.fill_bid import fill_bid
+from backend.routes.submit_bid import submit_bid
+from backend.routes.get_bids import get_bids
+from backend.routes.get_agent_status import agent_status
+from backend.routes.analytics import analytics
 
 def register_routes(app):
     """Register all route blueprints with the Flask app."""
