@@ -3,7 +3,7 @@ from flask_cors import CORS
 import os
 import json
 from backend.routes import register_routes  # TO DO: fix here to use the correct import - ERR:NO MODULE NAMED BACKEND
-from config import load_config
+from backend.config import load_config
 
 app = Flask(__name__)
 CORS(app)
@@ -13,6 +13,12 @@ config = load_config()
 
 # Register ALL route blueprints
 register_routes(app)  # Ensure this is called to register all blueprints
+
+@app.route('/', methods=['GET'])
+def index():
+    """Returns a simple message for the root URL."""
+    return "Welcome to the BidAgents API! Access /api/health for status."
+
 
 @app.route('/api/health', methods=['GET'])
 def health_check():

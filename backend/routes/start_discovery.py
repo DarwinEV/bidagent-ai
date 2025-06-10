@@ -3,7 +3,7 @@
 from flask import Blueprint, request, jsonify
 import os
 import json
-from backend.agents.Bid_Discovery.sub_agents.search_results.agent import bid_search_agent  # Absolute import
+from ..agents.Bid_Discovery.sub_agents.search_results.agent import bid_search_agent  # Absolute import
 
 start_disc = Blueprint('start_discovery', __name__)
 
