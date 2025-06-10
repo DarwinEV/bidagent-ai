@@ -1,4 +1,4 @@
-Flask==2.3.3
+Flask[async]==2.3.3
 flask-cors==4.0.0
 python-dotenv==1.0.0
 firebase-admin==6.2.0
@@ -13,9 +13,9 @@ Jinja2==3.1.2
 requests==2.31.0
 playwright==1.40.0
 gunicorn==21.2.0
-google-cloud-aiplatform==1.92.0
+google-cloud-aiplatform>=1.95.1
 google-genai==1.14.0
 gitpython==3.1.40
-google-adk
+google-adk>=1.2.1
 selenium==4.33.0
 pillow==11.2.1

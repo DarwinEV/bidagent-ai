@@ -8,7 +8,7 @@ from ..agents.Bid_Discovery.sub_agents.search_results.agent import bid_search_ag
 start_disc = Blueprint('start_discovery', __name__)
 
 @start_disc.route('/api/start_discovery', methods=['POST'])
-def start_discovery():
+async def start_discovery():
     """Start the bid discovery process by triggering the Orchestrator Agent."""
     try:
         payload = request.json
@@ -22,12 +22,22 @@ def start_discovery():
             return jsonify({'error': 'Missing userId'}), 400
 
         # Fetch bids using the search_results sub-agent
-        bids = bid_search_agent.search_bids(keywords, naics_codes, geography, portals)
+        bids_string = await bid_search_agent.search_bids(user_id, keywords, naics_codes, geography, portals)
+
+        bids_data = []
+        if bids_string:
+            try:
+                # The agent is prompted to return JSON, so we parse it here.
+                bids_data = json.loads(bids_string)
+            except json.JSONDecodeError:
+                # If the agent fails to return valid JSON, log it and proceed with an empty list.
+                print(f"Warning: Could not decode JSON from agent response: {bids_string}")
+                bids_data = []
 
         return jsonify({
             'success': True,
             'message': 'Discovery started',
-            'bids': bids  # Return the list of bids
+            'bids': bids_data  # Return the parsed list of bids
         })
     except Exception as e:
         print(f"Error starting discovery: {str(e)}")

@@ -6,6 +6,8 @@
 
 import time
 import warnings
+import asyncio
+import uuid
 
 import selenium
 from google.adk.agents.llm_agent import Agent
@@ -15,11 +17,49 @@ from google.genai import types
 from PIL import Image
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
+from google.adk.runners import Runner
+from google.adk.sessions import InMemorySessionService
+from google.adk.artifacts import InMemoryArtifactService
 
 from ...shared_libraries import constants
 from . import prompt
 
 warnings.filterwarnings("ignore", category=UserWarning)
+
+class BidSearchAgent(Agent):
+    async def search_bids(self, user_id, keywords, naics_codes, geography, portals):
+        """
+        Uses the LLM agent to search for bids based on the provided criteria.
+        """
+        session_service = InMemorySessionService()
+        artifact_service = InMemoryArtifactService()
+        app_name = "bid_discovery"
+        session_id = str(uuid.uuid4())
+        await session_service.create_session(app_name=app_name, user_id=user_id, session_id=session_id)
+
+        runner = Runner(
+            agent=self,
+            app_name=app_name,
+            session_service=session_service,
+            artifact_service=artifact_service,
+        )
+
+        initial_prompt = (
+            "Start a search on the following portals:"
+            f" {', '.join(portals) if portals else 'any relevant portal'}."
+            f" Use the following criteria: Keywords='{keywords}',"
+            f" NAICS Codes='{naics_codes}', Geography='{geography}'."
+            " Find the top 3 bid opportunities and return their details in a JSON format."
+        )
+        
+        user_content = types.Content(role='user', parts=[types.Part(text=initial_prompt)])
+        final_response = None
+        
+        async for event in runner.run_async(user_id=user_id, session_id=session_id, new_message=user_content):
+            if event.is_final_response() and event.content and event.content.parts:
+                final_response = event.content.parts[0].text
+
+        return final_response
 
 driver = None
 
@@ -205,7 +245,7 @@ def analyze_webpage_and_determine_action(
     return analysis_prompt
 
 
-bid_search_agent = Agent(
+bid_search_agent = BidSearchAgent(
     model=constants.MODEL,
     name="bid_search_agent",
     description="Search procurement websites like SAM.gov or state portals to find and return "
