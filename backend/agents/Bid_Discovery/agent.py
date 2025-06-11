@@ -17,7 +17,8 @@ FEATURES:
     3. displaying results in a user-friendly format
 
 """
-
+import sys
+print(sys.path)
 from google.adk.agents.llm_agent import Agent
 from ..shared_libraries import constants
 from .sub_agents.search_results.agent import bid_search_agent

@@ -1,40 +1,43 @@
+# THIS ROUTE SHOULD FETCH THE LIST OF SEARCHED BIDS FROM THE search_results sub agent
 
 from flask import Blueprint, request, jsonify
-from pubsub_publish import publish_message
 import os
-import firebase_admin
-from firebase_admin import firestore
 import json
+from ..agents.Bid_Discovery.sub_agents.search_results.agent import bid_search_agent  # Absolute import
 
 start_disc = Blueprint('start_discovery', __name__)
 
 @start_disc.route('/api/start_discovery', methods=['POST'])
-def start_discovery():
+async def start_discovery():
     """Start the bid discovery process by triggering the Orchestrator Agent."""
     try:
         payload = request.json
         user_id = payload.get('userId')
-        
+        keywords = payload.get('keywords', '')
+        naics_codes = payload.get('naicsCodes', '')
+        geography = payload.get('geography', '')
+        portals = payload.get('portals', [])
+
         if not user_id:
             return jsonify({'error': 'Missing userId'}), 400
-        
-        # Write a Firestore doc for job status
-        db = firestore.client()
-        status_ref = db.collection('users').document(user_id).collection('agentStatus').document('discovery')
-        status_ref.set({
-            'status': 'running',
-            'message': 'Starting bid discovery...',
-            'timestamp': firestore.SERVER_TIMESTAMP
-        })
-        
-        # Publish to Pub/Sub
-        topic_name = os.environ.get('PUBSUB_TOPIC_DISCOVERY', 'bid-discovery')
-        message_id = publish_message(topic_name, payload)
-        
+
+        # Fetch bids using the search_results sub-agent
+        bids_string = await bid_search_agent.search_bids(user_id, keywords, naics_codes, geography, portals)
+
+        bids_data = []
+        if bids_string:
+            try:
+                # The agent is prompted to return JSON, so we parse it here.
+                bids_data = json.loads(bids_string)
+            except json.JSONDecodeError:
+                # If the agent fails to return valid JSON, log it and proceed with an empty list.
+                print(f"Warning: Could not decode JSON from agent response: {bids_string}")
+                bids_data = []
+
         return jsonify({
             'success': True,
             'message': 'Discovery started',
-            'messageId': message_id
+            'bids': bids_data  # Return the parsed list of bids
         })
     except Exception as e:
         print(f"Error starting discovery: {str(e)}")

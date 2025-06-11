@@ -123,6 +123,8 @@ root_agent = Agent(
 - The user will no longer be asked for the same information multiple times.
 - The responsibility of each agent will be clearly separated.
 
+
+=======
 # Master Executable Plan
 
 This document provides a detailed, step-by-step implementation plan for each phase outlined in the project's master plan.

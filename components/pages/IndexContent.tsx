@@ -55,7 +55,7 @@ export const IndexContent = () => {
       <section className="py-20 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto text-center">
           <Badge className="mb-4 bg-blue-100 text-blue-800">
-            🏆 Google Agent Development Kit Winner
+            🏆 Google Agent Development Kit Hackathon
           </Badge>
           <h1 className="text-5xl md:text-6xl font-bold text-gray-900 mb-6">
             Stop Searching—

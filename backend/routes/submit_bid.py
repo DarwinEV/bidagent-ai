@@ -1,6 +1,6 @@
 
 from flask import Blueprint, request, jsonify
-from pubsub_publish import publish_message
+# from pubsub_publish import publish_message
 import os
 import firebase_admin
 from firebase_admin import firestore
