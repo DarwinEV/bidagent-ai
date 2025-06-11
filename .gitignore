@@ -43,4 +43,5 @@ next-env.d.ts
 # python
 **/__pycache__/
 
-**/logs/master_plan.txt
+**/Logs/master_plan.txt
+**/Docs/

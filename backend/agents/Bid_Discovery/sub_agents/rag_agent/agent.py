@@ -24,8 +24,8 @@ from .tools.get_corpus_info import get_corpus_info
 from .tools.list_corpora import list_corpora
 from .tools.rag_query import rag_query
 
-root_agent = Agent(
-    name="RagAgent",
+rag_agent = Agent(
+    name="rag_agent",
     # Using Gemini 2.5 Flash for best performance with RAG operations
     model="gemini-2.5-flash-preview-04-17",
     description="Vertex AI RAG Agent",

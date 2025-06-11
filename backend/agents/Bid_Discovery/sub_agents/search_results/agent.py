@@ -21,7 +21,7 @@ from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
 from google.adk.artifacts import InMemoryArtifactService
 
-from ...shared_libraries import constants
+from ....shared_libraries import constants
 from . import prompt
 
 warnings.filterwarnings("ignore", category=UserWarning)

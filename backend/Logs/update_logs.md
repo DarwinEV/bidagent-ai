@@ -124,3 +124,146 @@ root_agent = Agent(
 - The responsibility of each agent will be clearly separated.
 
 
+=======
+# Master Executable Plan
+
+This document provides a detailed, step-by-step implementation plan for each phase outlined in the project's master plan.
+
+---
+
+## Phase 1: Core Agent Refactoring & Optimization (Executable Plan)
+
+### Objective:
+Streamline the agent interaction flow, improve user experience, and optimize resource usage.
+
+#### **Step 1.1: Refactor Main Agent into a High-Level Router**
+-   **Action:** Modify the root agent's prompt (`backend/agents/Bid_Discovery/prompt.py`) to remove task-specific questions (e.g., for keywords, portals). The prompt should only ask the user to choose between high-level functions like "Bid Discovery" or "Document Analysis."
+-   **Action:** Ensure the agent's logic delegates the entire conversation to the appropriate sub-agent based on the user's choice.
+
+#### **Step 1.2: Implement Lazy Loading for WebDriver**
+-   **Action:** In the `search_results` agent (`.../search_results/agent.py`), refactor the Selenium WebDriver initialization.
+-   **Action:** Remove the global WebDriver instantiation. Create a `get_driver()` function that initializes the driver as a singleton on its first call.
+-   **Action:** Update all browser-related tools (`go_to_url`, `take_screenshot`, etc.) to call `get_driver()` before executing browser commands.
+
+#### **Step 1.3: Enhance Search Agent Intelligence**
+-   **Action:** Modify the search agent's prompt (`.../search_results/prompt.py`).
+-   **Action:** Add a new instruction step, `<Intelligent_Query_Refinement>`, before the search execution step. This new step commands the agent to use its own knowledge to expand the user's keywords with synonyms and related professional terms.
+
+---
+
+## Phase 2: Hierarchical Agent Architecture (Executable Plan)
+
+### Objective:
+Restructure the agent system into a clear hierarchy with a main orchestrator and specialized managers.
+
+#### **Step 2.1: Establish the Top-Level Orchestrator (`root_agent`)**
+-   **Action:** Create a main `agent.py` file directly inside `backend/agents/`.
+-   **Action:** Define the primary agent in this file and name the variable `root_agent` to comply with `google-adk` framework conventions.
+-   **Action:** Create a corresponding `prompt.py` to instruct the `root_agent` to delegate tasks to its specialized manager sub-agents.
+
+#### **Step 2.2: Formalize the `bid_discovery_manager`**
+-   **Action:** Convert the existing `Bid_Discovery` agent into a formal manager.
+-   **Action:** Rename the agent variable within `backend/agents/Bid_Discovery/agent.py` to `bid_discovery_manager` to reflect its role.
+
+#### **Step 2.3: Centralize Shared Libraries**
+-   **Action:** Move the `shared_libraries` directory from its nested location to the top-level `backend/agents/` directory.
+-   **Action:** Update all `import` statements in the `root_agent`, `bid_discovery_manager`, and its sub-agents to use the new, corrected relative paths (e.g., `from ..shared_libraries import constants`).
+
+#### **Step 2.4: Ensure Python Packging**
+-   **Action:** Create an `__init__.py` file in `backend/agents/` to ensure the directory is treated as a Python package, resolving module loading errors.
+
+---
+
+## Phase 3: PDF Form Filling & Document Automation (Executable Plan)
+
+### Objective:
+Introduce document automation capabilities, allowing the system to programmatically create and complete bid forms, even on non-interactive PDFs.
+
+#### **Step 3.1: Add `PyMuPDF` Dependency**
+-   **Action:** Add the `PyMuPDF` library to the `backend/requirements.txt` file to enable advanced PDF manipulation.
+
+#### **Step 3.2: Create PDF Manipulation Tools**
+-   **Action:** In a new `tools.py` file within `backend/agents/pdf_filler_manager/`, create the necessary functions:
+    -   `list_pdf_form_fields(pdf_path)`: To inspect a PDF and find existing form fields.
+    -   `find_text_coordinates(pdf_path, text_to_find)`: To find the exact coordinates of a given string on a PDF page.
+    -   `create_text_field(pdf_path, ...)`: To programmatically add a new, writable text field to the PDF at specified coordinates.
+    -   `fill_pdf_form_field(pdf_path, field_name, value)`: To write data into a field (either existing or newly created).
+
+#### **Step 3.3: Implement the `pdf_filler_manager`**
+-   **Action:** Create the `agent.py` and `prompt.py` for the manager inside `backend/agents/pdf_filler_manager/`.
+-   **Action:** The prompt must define a branching workflow: If existing fields are found, fill them. If not, use the creation tools to find text labels, create new fields, and then fill them.
+-   **Action:** The agent definition must be equipped with all the new PDF tools.
+
+#### **Step 3.4: Integrate the Manager**
+-   **Action:** In the main `root_agent` (`backend/agents/agent.py`), import the newly created `pdf_filler_manager` and add it to the `sub_agents` list, making it available for delegation.
+
+---
+
+## Phase 4: UI Integration for Document Automation (Executable Plan)
+
+### Objective:
+Provide a seamless frontend user experience for the new PDF filling functionality.
+
+#### **Step 4.1: Create Backend API for File Handling**
+-   **Action:** Create a new file, `backend/routes/pdf_routes.py`.
+-   **Action:** In this file, define two Flask routes:
+    -   **`POST /api/upload-pdf`**: This endpoint will receive a file from the frontend. It will save the file to a secure, temporary directory on the server (e.g., `/tmp/uploads/`) and return the server-side file path as a JSON response (e.g., `{"filePath": "/tmp/uploads/document.pdf"}`).
+    -   **`GET /api/download-pdf/<filename>`**: This endpoint will allow the user to download a completed file. It will use Flask's `send_from_directory` to securely serve the file from the temporary directory where filled PDFs are saved.
+-   **Action:** Register this new route blueprint in the main Flask `app.py`.
+
+#### **Step 4.2: Develop Frontend UI Components**
+-   **Action:** In your frontend application, create a new view or page for "PDF Form Filling."
+-   **Action:** Implement a **File Uploader** component. When a user selects a PDF, the component will make a `POST` request to the `/api/upload-pdf` endpoint and store the returned `filePath` in the component's state.
+-   **Action:** Implement a **Company Information Form**. This will be a standard web form with input fields for "Company Name," "Address," "EIN," etc.
+-   **Action:** Implement a **"Fill Document" Button**. When clicked, this button will trigger the main agent interaction. It will send a message to the `root_agent` that includes:
+    -   The user's intent (e.g., "I want to fill a PDF").
+    -   The `filePath` obtained from the uploader.
+    -   All the data collected from the company information form.
+-   **Action:** Implement a **Status and Download** area. After the agent interaction is complete, the final response should contain the path to the new, filled document. The UI will display this and present a "Download Filled PDF" link that points to the `/api/download-pdf/<filename>` endpoint.
+
+# Update 5: PDF Tool Bug Fix
+
+## 1. Objective
+Fix the `AttributeError: 'Document' object has no attribute 'save_inplace'` error that occurs when the `pdf_filler_manager` attempts to create a new form field. This will make the PDF creation workflow functional.
+
+## 2. Analysis of the Error
+The error is caused by an incorrect method call in the `create_text_field` tool within `backend/agents/pdf_filler_manager/tools.py`. The method `doc.save_inplace()` does not exist in the PyMuPDF library. The correct method to save changes to the same file is `doc.save(pdf_path, incremental=True)`. This allows for a stateful workflow where one tool can create a field and a subsequent tool can fill it within the same PDF file.
+
+## 3. Execution Plan
+
+### **Step 1: Correct the `create_text_field` Tool**
+-   **File to Modify:** `backend/agents/pdf_filler_manager/tools.py`
+-   **Action:** Locate the `create_text_field` function.
+-   **Change:** Replace the line `doc.save_inplace()` with `doc.save(pdf_path, incremental=True)`. This will correctly save the newly created field to the PDF file, allowing the `fill_pdf_form_field` tool to find and populate it in the next step.
+
+# Update 6: Robust PDF Tool Refactoring
+
+## 1. Objective
+Fix the workflow-halting error caused by `incremental` saves failing on certain PDFs. This will be achieved by refactoring the PDF tools to be more atomic and robust, ensuring they can handle a wider variety of document types, including those with encryption or non-standard structures.
+
+## 2. Analysis of the Error
+The agent's output shows that `doc.save(pdf_path, incremental=True)` is failing. This suggests that appending changes is not a universally reliable method. The current workflow, which relies on one tool creating a field and a second tool filling it, is fragile. A better approach is to combine these actions into a single, atomic tool that always produces a new, clean output file.
+
+## 3. Execution Plan
+
+### **Step 1: Refactor the PDF Tools (`tools.py`)**
+-   **File to Modify:** `backend/agents/pdf_filler_manager/tools.py`
+-   **Action 1: Remove `create_text_field`**: This tool and its problematic save logic will be removed entirely.
+-   **Action 2: Create a New, Atomic Tool**: Introduce a new function: `create_and_fill_field(pdf_path: str, page_number: int, field_name: str, x0: float, y0: float, x1: float, y1: float, value: str) -> str`.
+    -   This tool will handle the entire "create and fill" process in one step.
+    -   It will open the PDF, create the widget, set its value, add it to the page, and crucially, **save the output to a new file** (e.g., `original_name_filled.pdf`).
+    -   It will return a confirmation message with the path to this new file.
+-   **Action 3: Standardize `fill_pdf_form_field`**: Ensure the existing `fill_pdf_form_field` tool also follows the same "save to new file" pattern to maintain consistent behavior. (It already does this, so a review is sufficient).
+
+### **Step 2: Simplify the Agent's Prompt (`prompt.py`)**
+-   **File to Modify:** `backend/agents/pdf_filler_manager/prompt.py`
+-   **Action:** Rewrite "Workflow B: Create and Fill New Fields".
+-   **Change:** Instead of the complex, multi-step process of finding coordinates, creating a field, and then filling it, the agent will now be instructed to do the following for each piece of data:
+    1.  Use `find_text_coordinates` to get the location.
+    2.  Use the new, single `create_and_fill_field` tool to perform the modification.
+-   This makes the agent's logic simpler and less prone to state-related errors.
+
+### **Step 3: Update the Agent's Toolset (`agent.py`)**
+-   **File to Modify:** `backend/agents/pdf_filler_manager/agent.py`
+-   **Action:** Update the list of tools assigned to the `pdf_filler_manager`.
+-   **Change:** Remove `create_text_field` and add the new `create_and_fill_field` tool.
