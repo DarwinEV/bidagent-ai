@@ -69,11 +69,11 @@ def get_driver():
     global driver
     if driver is None and not constants.DISABLE_WEB_DRIVER:
         print("🚀 Initializing new Chrome WebDriver instance...")
-        options = Options()
-        options.add_argument("--window-size=1920x1080")
-        options.add_argument("--verbose")
-        options.add_argument("user-data-dir=/tmp/selenium")
-        driver = selenium.webdriver.Chrome(options=options)
+    options = Options()
+    options.add_argument("--window-size=1920x1080")
+    options.add_argument("--verbose")
+    options.add_argument("user-data-dir=/tmp/selenium")
+    driver = selenium.webdriver.Chrome(options=options)
     return driver
 
 
