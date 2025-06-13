@@ -204,5 +204,35 @@ Refactor the agent interaction flow to eliminate redundant information gathering
 *   The `bid_search_agent` is now solely responsible for gathering bid discovery details (keywords, portals, etc.) from the user and initiating the web search, ensuring the browser tab is opened only after collecting the necessary information.
 *   Code readability is improved by renaming the RAG agent.
 
+## [2024-06-10] - Iterative Debugging & Heuristic Enhancement
+
+### Objective
+Systematically identify and resolve a series of cascading errors in the document automation workflow, including library compatibility issues, file path errors, and logical flaws, while iteratively improving the precision of the form field extraction tools based on user feedback.
+
+### Changes Made
+
+1.  **Fixed Library Incompatibility (`AttributeError`)**:
+    *   Identified that the `fitz.TextWidget` class was not available in the installed version of `PyMuPDF`.
+    *   Refactored the `create_fields_from_blueprint` tool in `document_automation_manager/tools.py` to use the older, more compatible `fitz.Widget` method, ensuring the code works without requiring a library upgrade.
+
+2.  **Repaired File Path Logic (`TypeError`)**:
+    *   Diagnosed that a `TypeError` was caused by a faulty `get_output_path` utility function that was missing a required `clean_base_name` parameter.
+    *   Corrected the function signature in `shared_libraries/utils.py` to restore the missing parameter, fixing the toolchain for saving the final, filled PDF.
+
+3.  **Enhanced Local Heuristic Tool for Precision**:
+    *   Based on user feedback that the tool was only finding "about half" of the fields, the `extract_fields_with_local_heuristics` tool was significantly upgraded.
+    *   The tool's logic was expanded from a simple underline-finder to a multi-strategy system that also identifies fields based on colon-terminated labels (e.g., "Name:"). This dramatically improved its coverage and accuracy.
+
+4.  **Reinforced Agent Error Handling**:
+    *   The `AUTOMATION_MANAGER_PROMPT` was updated with explicit `If-Then` logic, commanding the agent to **STOP** and report the exact error if a critical tool like `create_fields_from_blueprint` fails. This prevents the agent from getting stuck in failure loops or hallucinating successful outcomes.
+
+### Expected Result
+*   The document automation workflow is now significantly more robust and resilient.
+*   The agent can correctly create and fill PDFs without crashing due to library or file path errors.
+*   The local heuristic tool is more accurate and captures a higher percentage of form fields.
+*   The agent's error handling is more predictable and transparent to the user.
+
+---
+
 # modify the phrase with words that will produce better results as well as try other words if we do not get good results.
 # Find a way for it to look for procurement links.

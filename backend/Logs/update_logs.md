@@ -265,3 +265,62 @@ The agent's output shows that `doc.save(pdf_path, incremental=True)` is failing.
 -   **File to Modify:** `backend/agents/pdf_filler_manager/agent.py`
 -   **Action:** Update the list of tools assigned to the `pdf_filler_manager`.
 -   **Change:** Remove `create_text_field` and add the new `create_and_fill_field` tool.
+
+# Update 7: Unified PDF Document Automation & Form Field Workflow
+
+## 1. Objective
+Establish a seamless, extensible workflow for PDF document automation, enabling the orchestrator agent to route PDF-related tasks to a manager agent, which then delegates to specialized sub-agents for form field detection, creation, and filling. The workflow supports both interactive (with form fields) and non-interactive (scanned or flat) PDFs, using Document AI and OCR tools as appropriate.
+
+## 2. Analysis of the Problem
+Previous implementations separated PDF form filling and form field detection, lacking a unified, user-friendly workflow. There was no clear, extensible agent hierarchy for handling the decision logic between digital and scanned PDFs, nor a standardized way to store and pass form field information for downstream filling.
+
+## 3. Executable Plan - Step-by-Step
+
+### Step 1: Orchestrator Agent Enhancement
+- **File:** `backend/agents/agent.py`, `backend/agents/prompt.py`
+- **Action:** Update the root orchestrator agent to recognize when the user wants to perform PDF automation. Add logic to transfer the user to the `document_automation_manager` when such a request is detected.
+
+### Step 2: Document Automation Manager Workflow
+- **File:** `backend/agents/document_automation_manager/agent.py`, `prompt.py`
+- **Action:** The manager agent should:
+    1. Prompt the user for the PDF file, its MIME type, and whether it contains form fields.
+    2. Based on the user's response:
+        - If the PDF has form fields, delegate to the digital form field tools (Document AI sub-agent).
+        - If the PDF does not have form fields, delegate to the OCR sub-agent to detect potential form field locations.
+    3. Store the detected or extracted form field information in a standardized JSON format for downstream use.
+
+### Step 3: Specialized Sub-Agent Delegation
+- **File:** `backend/agents/document_automation_manager/sub_agents/`
+- **Action:**
+    - Use the `docai_tool_agent` for digital PDFs with form fields (Document AI extraction).
+    - Use the `ocr_tool_agent` for scanned/flat PDFs (OCR-based field detection).
+    - Use the `json_formatter_agent` to standardize the output as a JSON array of form fields (excluding signature fields).
+    - Use the `pdf_filler_agent` to fill out the PDF using the JSON field data, if/when the user provides values.
+
+### Step 4: JSON Field Storage and Handoff
+- **File:** (as needed, e.g., in manager or shared libraries)
+- **Action:** Ensure the output from field detection (digital or OCR) is stored in a JSON structure, ready for the PDF filler agent to consume. This enables a clean separation between field detection/creation and field filling.
+
+### Step 5: Maintain Cohesive Agent Structure
+- **Action:**
+    - The orchestrator only routes to the document automation manager.
+    - The manager handles user interaction and delegates to sub-agents based on document type.
+    - Sub-agents handle specialized tasks (field detection, JSON formatting, filling).
+    - All agents and tools should be modular and extensible for future enhancements (e.g., new field types, improved OCR, etc.).
+
+## 4. Summary of Previous Phases (for context)
+
+- **Phase 1:** Core agent refactoring and optimization (high-level router, lazy WebDriver, intelligent query refinement).
+- **Phase 2:** Hierarchical agent architecture (root orchestrator, manager agents, centralized shared libraries, Python packaging).
+- **Phase 3:** PDF form filling and document automation (PyMuPDF tools, PDF filler manager, branching workflow for field creation/filling).
+- **Phase 4:** UI integration for document automation (backend API for file handling, frontend components for upload/fill/download).
+- **Update 5 & 6:** Robust PDF tool bug fixes and refactoring (atomic field creation/filling, improved error handling).
+
+## 5. Expected Outcome
+- Users interact with the orchestrator as usual and can request PDF automation.
+- The orchestrator transfers control to the document automation manager, which collects the PDF, MIME type, and field presence info.
+- The manager delegates to the appropriate sub-agent (Document AI or OCR) for field detection/creation.
+- Form field data is stored in a standardized JSON format, ready for the PDF filler agent to complete the document.
+- The agent structure is modular, extensible, and future-proofed for additional document automation features.
+
+</rewritten_file>
