@@ -219,7 +219,7 @@ Systematically identify and resolve a series of cascading errors in the document
     *   Diagnosed that a `TypeError` was caused by a faulty `get_output_path` utility function that was missing a required `clean_base_name` parameter.
     *   Corrected the function signature in `shared_libraries/utils.py` to restore the missing parameter, fixing the toolchain for saving the final, filled PDF.
 
-3.  **Enhanced Local Heuristic Tool for Precision**:
+3.  **Enhanced Local Heuristics**:
     *   Based on user feedback that the tool was only finding "about half" of the fields, the `extract_fields_with_local_heuristics` tool was significantly upgraded.
     *   The tool's logic was expanded from a simple underline-finder to a multi-strategy system that also identifies fields based on colon-terminated labels (e.g., "Name:"). This dramatically improved its coverage and accuracy.
 
@@ -236,3 +236,21 @@ Systematically identify and resolve a series of cascading errors in the document
 
 # modify the phrase with words that will produce better results as well as try other words if we do not get good results.
 # Find a way for it to look for procurement links.
+
+## [Unreleased] - 2025-06-17
+
+### Fixed
+- **Dependency Conflicts**: Resolved multiple `pip` installation errors.
+  - Corrected package name from `google-cloud-secretmanager` to `google-cloud-secret-manager` in `requirements.txt`.
+  - Upgraded `google-cloud-secret-manager` to version `2.23.3` to satisfy `google-adk` dependency requirements.
+  - Added flexible versioning for `opencv-python-headless` and `numpy` to prevent future conflicts.
+- **Form Field Detection Bugs**: Addressed several runtime `AttributeError` exceptions in the local heuristics engine (`extract_fields_with_local_heuristics`).
+  - Corrected an issue where the text content of an underscore field was used instead of its coordinates.
+  - Fixed a bug in the `merge_overlapping_rects` function by replacing a non-existent `distance_to` method with a robust intersection check, correctly merging nearby fields.
+
+### Changed
+- **Optimized Local Heuristics**: Significantly improved the performance and accuracy of the computer vision-based form field detection.
+  - Added an "early exit" to skip processing empty or sparse pages in a document.
+  - Implemented detailed debug logging (`[DEBUG-VISION]`) to provide visibility into the field extraction process.
+  - Made line detection parameters much stricter to dramatically reduce the number of false-positive fields, which was causing the LLM to hang on large documents.
+  - Added a filter to ignore very long horizontal lines that are likely page borders or dividers, not form fields.

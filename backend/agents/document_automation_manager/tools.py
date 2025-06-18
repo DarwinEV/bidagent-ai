@@ -3,6 +3,8 @@ import json
 import re
 from google.cloud import documentai
 import fitz  # PyMuPDF
+import numpy as np
+import cv2
 
 # Add project root to sys.path to allow absolute imports from /backend
 import sys
@@ -18,7 +20,19 @@ from backend.agents.shared_libraries.utils import get_absolute_path, get_output_
 # ============================================
 
 def analyze_document_with_docai(file_path: str, mime_type: str) -> str:
-    """Processes a document using the Google Cloud Document AI Form Parser."""
+    """
+    Processes a document using the Google Cloud Document AI Form Parser and
+    returns a clean JSON blueprint of identified form fields.
+    """
+    def _get_text(text_anchor: documentai.Document.TextAnchor, text: str) -> str:
+        """Helper function to extract text from a Document AI TextAnchor."""
+        if not text_anchor or not text_anchor.text_segments:
+            return ""
+        return "".join(
+            text[segment.start_index : segment.end_index]
+            for segment in text_anchor.text_segments
+        ).strip()
+
     try:
         config = load_config()
         DOCAI_PROJECT_ID, DOCAI_LOCATION, DOCAI_PROCESSOR_ID = (
@@ -38,21 +52,65 @@ def analyze_document_with_docai(file_path: str, mime_type: str) -> str:
         raw_document = documentai.RawDocument(content=image_content, mime_type=mime_type)
         request = documentai.ProcessRequest(name=name, raw_document=raw_document)
         result = client.process_document(request=request)
+        document = result.document
         
-        # Extract relevant data... (This can be enhanced later)
-        return documentai.Document.to_json(result.document)
+        form_fields = []
+        for page in document.pages:
+            for field in page.form_fields:
+                field_name = _get_text(field.field_name.text_anchor, document.text)
+                # The value bounding box is the actual location of the fillable field.
+                vertices = field.field_value.bounding_poly.normalized_vertices
+                
+                if not field_name or not vertices:
+                    continue # Skip fields without a name or location
+
+                # Clean up the field name
+                field_name = field_name.replace(":", "").strip()
+                if "signature" in field_name.lower():
+                    continue
+
+                form_fields.append({
+                    "field_name": field_name,
+                    "field_type": "text", # Assume text, can be refined if DocAI provides types
+                    "is_required": False, # DocAI form parser doesn't reliably provide this
+                    "page_number": page.page_number,
+                    "coordinates": [{"x": v.x, "y": v.y} for v in vertices]
+                })
+        
+        if not form_fields:
+            return '{"error": "Google Document AI did not find any form fields."}'
+
+        return json.dumps({"form_fields": form_fields}, indent=2)
 
     except Exception as e:
         return f'{{"error": "An error occurred in the Document AI tool: {type(e).__name__} - {str(e)}"}}'
 
 def run_ocr_and_extract_fields(file_path: str, mime_type: str) -> str:
     """
-    Runs the full OCR pipeline: calls Google Document AI, processes the raw
-    result, and returns a clean JSON blueprint of identified form fields.
-    This avoids passing massive raw data back to the agent.
+    Runs a hybrid OCR pipeline: calls Google Document AI for OCR, then uses
+    local heuristics on the OCR output to find underscore-based form fields.
+    This is the most robust method for documents without structured form data.
     """
+    def _get_text_from_anchor(anchor, text):
+        if not anchor.text_segments:
+            return ""
+        return "".join(text[s.start_index:s.end_index] for s in anchor.text_segments)
+
+    def _get_bounds_from_token(token):
+        # Helper to get a simple (x0, y0, x1, y1) bounding box from vertices
+        xs = [v.x for v in token.layout.bounding_poly.normalized_vertices]
+        ys = [v.y for v in token.layout.bounding_poly.normalized_vertices]
+        return (min(xs), min(ys), max(xs), max(ys))
+
+    def _rects_intersect(r1, r2):
+        return not (r1[2] < r2[0] or r1[0] > r2[2] or r1[3] < r2[1] or r1[1] > r2[3])
+
+    def _merge_rects(r1, r2):
+        return (min(r1[0], r2[0]), min(r1[1], r2[1]), max(r1[2], r2[2]), max(r1[3], r2[3]))
+
     try:
         config = load_config()
+        # Ensure we are using the OCR processor for this, not the form parser
         DOCAI_PROJECT_ID, DOCAI_LOCATION, DOCAI_OCR_PROCESSOR_ID = (
             config.get('DOCAI_PROJECT_ID'), config.get('DOCAI_LOCATION'), config.get('DOCAI_OCR_PROCESSOR_ID')
         )
@@ -72,118 +130,244 @@ def run_ocr_and_extract_fields(file_path: str, mime_type: str) -> str:
         result = client.process_document(request=request)
         document = result.document
 
-        words = []
-        for page in document.pages:
+        all_tokens = []
+        for page_num, page in enumerate(document.pages):
             for token in page.tokens:
-                text_anchor = token.layout.text_anchor
-                content = document.text[text_anchor.text_segments[0].start_index : text_anchor.text_segments[0].end_index]
-                vertices = token.layout.bounding_poly.normalized_vertices
-                words.append({"text": content, "page_number": page.page_number, "coordinates": [{"x": v.x, "y": v.y} for v in vertices]})
-        
-        form_fields = []
-        for i, word in enumerate(words):
-            text = word.get("text", "").strip()
-            if text.endswith(':'):
-                field_name = text[:-1]
-                if "signature" in field_name.lower(): continue
-                label_coords = word.get("coordinates", [])
-                if not label_coords: continue
-                
-                y0 = min(v['y'] for v in label_coords)
-                y1 = max(v['y'] for v in label_coords)
-                x1_label = max(v['x'] for v in label_coords)
-                
-                x0_field, x1_field = x1_label + 0.01, x1_label + 0.3
-                
-                form_fields.append({
-                    "field_name": field_name, "field_type": "text", "is_required": False,
-                    "page_number": word.get("page_number", 1),
-                    "coordinates": [{"x": x0_field, "y": y0}, {"x": x1_field, "y": y0}, {"x": x1_field, "y": y1}, {"x": x0_field, "y": y1}]
+                all_tokens.append({
+                    "text": _get_text_from_anchor(token.layout.text_anchor, document.text),
+                    "page_number": page_num + 1,
+                    "bounds": _get_bounds_from_token(token)
                 })
 
-        return json.dumps({"form_fields": form_fields}, indent=2)
+        # Strategy 1: Find all tokens that contain any underscores.
+        underline_tokens = [t for t in all_tokens if '_' in t['text']]
+        if not underline_tokens:
+            return '{"error": "The OCR found no underscore characters to create fields from."}'
+            
+        # Strategy 2: Merge adjacent underscore tokens into field rectangles.
+        merged_underline_rects = []
+        sorted_tokens = sorted(underline_tokens, key=lambda t: (t['page_number'], t['bounds'][1], t['bounds'][0]))
+        
+        current_rect_data = {
+            "bounds": sorted_tokens[0]['bounds'], 
+            "page": sorted_tokens[0]['page_number']
+        }
+        for i in range(1, len(sorted_tokens)):
+            token_bounds = sorted_tokens[i]['bounds']
+            token_page = sorted_tokens[i]['page_number']
+            # Check if tokens are on the same page, same line, and horizontally close.
+            if token_page == current_rect_data['page'] and \
+               abs(token_bounds[1] - current_rect_data['bounds'][1]) < 0.01 and \
+               (token_bounds[0] - current_rect_data['bounds'][2]) < 0.05:
+                current_rect_data['bounds'] = _merge_rects(current_rect_data['bounds'], token_bounds)
+            else:
+                merged_underline_rects.append(current_rect_data)
+                current_rect_data = {"bounds": token_bounds, "page": token_page}
+        merged_underline_rects.append(current_rect_data)
+
+        # Strategy 3: Find a label for each field.
+        form_fields = []
+        for field_data in merged_underline_rects:
+            field_rect = field_data['bounds']
+            page_num = field_data['page']
+            ux0, uy0, ux1, uy1 = field_rect
+
+            # Heuristic: Look for a label in a context box to the left and slightly above.
+            context_rect = (max(0, ux0 - 0.4), uy0 - 0.02, ux0 - 0.005, uy1 + 0.01)
+            context_tokens = [t for t in all_tokens if t['page_number'] == page_num and 
+                              '_' not in t['text'] and _rects_intersect(t['bounds'], context_rect)]
+            context_tokens.sort(key=lambda t: (t['bounds'][1], t['bounds'][0]))
+            
+            field_name = " ".join(t['text'] for t in context_tokens).strip(": \n")
+            if not field_name:
+                field_name = f"Unnamed Field {page_num}-{int(ux0*1000)}"
+            
+            field_name = re.sub(r'\s*\n\s*', ' ', field_name).strip()
+            if "signature" in field_name.lower(): continue
+
+            form_fields.append({
+                "field_name": field_name, "field_type": "text", "is_required": False,
+                "page_number": page_num,
+                "coordinates": [{"x": ux0, "y": uy0}, {"x": ux1, "y": uy0}, {"x": ux1, "y": uy1}, {"x": ux0, "y": uy1}]
+            })
+        
+        final_fields = {f["field_name"]: f for f in form_fields}
+        return json.dumps({"form_fields": list(final_fields.values())}, indent=2)
 
     except Exception as e:
         return f'{{"error": "An error occurred during the OCR pipeline: {type(e).__name__} - {str(e)}"}}'
 
+def merge_overlapping_rects(rects: list, tolerance: int = 5) -> list:
+    """
+    Merges overlapping or very close rectangles into larger bounding boxes.
+    This version is corrected to work with fitz.Rect objects.
+    """
+    if not rects:
+        return []
+    
+    # Sort by top-left corner
+    sorted_rects = sorted(rects, key=lambda r: (r.y0, r.x0))
+    
+    merged = []
+    if not sorted_rects:
+        return merged
+
+    current_merge_rect = sorted_rects[0]
+
+    for i in range(1, len(sorted_rects)):
+        next_rect = sorted_rects[i]
+        
+        # Create an expanded version of the current rectangle to check for closeness.
+        # A new variable is used to avoid modifying the rectangle in the list.
+        expanded_rect = fitz.Rect(current_merge_rect)
+        expanded_rect.x0 -= tolerance
+        expanded_rect.y0 -= tolerance
+        expanded_rect.x1 += tolerance
+        expanded_rect.y1 += tolerance
+
+        # If they intersect or are very close (the expanded rect intersects), merge them.
+        if expanded_rect.intersects(next_rect):
+            current_merge_rect.include_rect(next_rect)
+        else:
+            # If no intersection, the current merge is complete
+            merged.append(current_merge_rect)
+            current_merge_rect = next_rect
+    
+    # Add the last merged rectangle
+    merged.append(current_merge_rect)
+    return merged
+
 def extract_fields_with_local_heuristics(file_path: str) -> str:
     """
-    Analyzes a PDF locally using an aggressive, multi-strategy heuristic approach
-    to find all potential form fields. This is the primary, fastest analysis method.
+    Analyzes a PDF using a high-speed, hybrid approach. It uses computer vision
+    to detect lines from the document's vector graphics and combines this with a
+    fast text-based search for underscores. This method is optimized for speed
+    and is designed to run efficiently on CPU-bound environments.
     """
     try:
         doc = fitz.open(get_absolute_path(file_path))
-        form_fields = []
-        found_field_coords = [] # To avoid re-processing the same field space
+        all_form_fields = []
+        DPI = 300  # Higher DPI for better CV accuracy
+        print(f"[DEBUG-VISION] Document '{os.path.basename(file_path)}' has {len(doc)} pages.")
 
         for page_num, page in enumerate(doc):
-            # Extract text blocks for better contextual grouping
-            blocks = page.get_text("blocks")
-            words = page.get_text("words")
+            print(f"--- [DEBUG-VISION] Processing Page {page_num + 1}/{len(doc)} ---")
+            
+            # --- OPTIMIZATION: Early exit for empty or irrelevant pages ---
+            if len(page.get_text()) < 50 and not page.get_images():
+                print(f"[DEBUG-VISION] Page {page_num + 1} is sparse, skipping.")
+                continue
 
-            # Strategy: Find ALL underline sections first, then find their context
-            underline_fields = [w for w in words if all(c == '_' for c in w[4]) and len(w[4]) > 3]
-
-            for u_field in underline_fields:
-                ux0, uy0, ux1, uy1 = u_field[:4]
-                field_rect = fitz.Rect(u_field[:4])
+            # --- STRATEGY 1: High-Speed Computer Vision Line Detection ---
+            pix = page.get_pixmap(dpi=DPI, colorspace=fitz.csGRAY, alpha=False)
+            img_data = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.h, pix.w)
+            inverted_img = cv2.bitwise_not(img_data)
+            
+            # --- OPTIMIZATION: Stricter, more refined Hough Line parameters ---
+            # Threshold is higher, minLineLength is longer (at least 1 inch at 300 DPI)
+            lines = cv2.HoughLinesP(
+                inverted_img, rho=1, theta=np.pi / 180, threshold=150,
+                minLineLength=300, maxLineGap=20
+            )
+            
+            page_line_rects = []
+            if lines is not None:
+                print(f"[DEBUG-VISION] Page {page_num + 1}: Found {len(lines)} total lines via computer vision.")
+                horizontal_lines = lines[np.abs(lines[:, 0, 1] - lines[:, 0, 3]) < 20] # Allow slightly more skew
                 
-                # Avoid processing a field that's part of an already found larger field
-                if any(field_rect in f for f in found_field_coords):
+                # --- FILTERING: Remove lines that are likely borders ---
+                page_width_pixels = pix.w
+                final_lines = []
+                for line in horizontal_lines:
+                    x1, _, x2, _ = line[0]
+                    if abs(x2 - x1) < (page_width_pixels * 0.9): # Must be less than 90% of page width
+                        final_lines.append(line)
+                print(f"[DEBUG-VISION] Page {page_num + 1}: Filtered to {len(final_lines)} horizontal, non-border lines.")
+
+                # --- FILTERING: Remove lines that are part of tables ---
+                # Sort lines by their y-coordinate to make comparison easier
+                final_lines.sort(key=lambda l: l[0][1])
+                isolated_lines = []
+                for i, line in enumerate(final_lines):
+                    is_part_of_table = False
+                    y1 = line[0][1]
+                    # Check lines before and after in the sorted list
+                    for j in range(max(0, i - 5), min(len(final_lines), i + 6)):
+                        if i == j: continue
+                        y2 = final_lines[j][0][1]
+                        # If another line is vertically very close (less than 1/10th of an inch at 300 DPI)
+                        if abs(y1 - y2) < 30:
+                            is_part_of_table = True
+                            break
+                    if not is_part_of_table:
+                        isolated_lines.append(line)
+                
+                print(f"[DEBUG-VISION] Page {page_num + 1}: Filtered to {len(isolated_lines)} isolated lines (table rule).")
+
+                for line in isolated_lines:
+                    x1, y1, x2, y2 = line[0]
+                    # Convert pixel coordinates back to PDF points
+                    pdf_rect = fitz.Rect(x1, y1, x2, y2) / DPI * 72
+                    pdf_rect.y0 -= 4  # Expand rect slightly for better text capture
+                    pdf_rect.y1 += 4
+                    page_line_rects.append(pdf_rect)
+            else:
+                print(f"[DEBUG-VISION] Page {page_num + 1}: Found 0 lines via computer vision.")
+
+            # --- STRATEGY 2: Underscore-Based Text Search ---
+            # Correctly get the fitz.Rect for each word containing underscores
+            page_underscore_rects = [
+                fitz.Rect(word[:4]) for word in page.get_text("words") if "___" in word[4]
+            ]
+            print(f"[DEBUG-VISION] Page {page_num + 1}: Found {len(page_underscore_rects)} underscore fields via text search.")
+
+            # --- MERGE & REFINE ---
+            all_page_rects = page_line_rects + page_underscore_rects
+            merged_rects = merge_overlapping_rects(all_page_rects)
+            print(f"[DEBUG-VISION] Page {page_num + 1}: Found {len(merged_rects)} total potential fields after merging.")
+
+            page_fields = []
+            for rect in merged_rects:
+                # Find text to the left of the rectangle to use as a label
+                label_rect = fitz.Rect(rect.x0 - 200, rect.y0 - 5, rect.x0 - 5, rect.y1 + 5)
+                words = [w[4] for w in page.get_text("words", clip=label_rect)]
+                field_name = " ".join(words).strip(": \n")
+                if not field_name:
+                    field_name = f"Unnamed Field {page_num + 1}-{int(rect.x0)}"
+                
+                field_name = re.sub(r'\s*\n\s*', ' ', field_name).strip()
+                if "signature" in field_name.lower():
                     continue
 
-                # Define a "context area" to the left and slightly above the underline
-                context_rect = fitz.Rect(0, uy0 - 40, ux0 - 5, uy1 + 5)
-                
-                context_words = [w for w in words if fitz.Rect(w[:4]).intersects(context_rect)]
-                
-                field_name = " ".join(w[4] for w in context_words).strip()
-                
-                # If no direct context, look at the last block of text before the field
-                if not field_name:
-                    potential_blocks = [b for b in blocks if b[3] < uy0]
-                    if potential_blocks:
-                        last_block = potential_blocks[-1][4]
-                        # Take the last sentence of the last block
-                        field_name = last_block.replace('\n', ' ').strip().split('.')[-1].strip()
-
-                if not field_name:
-                    field_name = f"Unnamed Field {page_num+1}-{int(ux0)}"
-
-                # Clean and add the field
-                field_name = field_name.strip(": ")
-                if "signature" in field_name.lower(): continue
-
-                form_fields.append({
-                    "field_name": field_name, "field_type": "text", "is_required": False,
+                page_fields.append({
+                    "field_name": field_name,
+                    "field_type": "text",
+                    "is_required": False,
                     "page_number": page_num + 1,
                     "coordinates": [
-                        {"x": ux0 / page.rect.width, "y": uy0 / page.rect.height},
-                        {"x": ux1 / page.rect.width, "y": uy0 / page.rect.height},
-                        {"x": ux1 / page.rect.width, "y": uy1 / page.rect.height},
-                        {"x": ux0 / page.rect.width, "y": uy1 / page.rect.height}
+                        {"x": rect.x0 / page.rect.width, "y": rect.y0 / page.rect.height},
+                        {"x": rect.x1 / page.rect.width, "y": rect.y0 / page.rect.height},
+                        {"x": rect.x1 / page.rect.width, "y": rect.y1 / page.rect.height},
+                        {"x": rect.x0 / page.rect.width, "y": rect.y1 / page.rect.height},
                     ]
                 })
-                found_field_coords.append(field_rect)
-        
-        if not form_fields:
-            return '{"error": "No fields were found using local heuristics."}'
             
-        # Post-process to merge field names
-        merged_fields = {}
-        for field in form_fields:
-            name = field["field_name"]
-            if name in merged_fields:
-                # If a field with this name already exists, maybe just keep the first one
-                # Or implement a merging logic, for now, we skip
-                continue
-            else:
-                merged_fields[name] = field
+            if page_fields:
+                all_form_fields.extend(page_fields)
+
+        print(f"--- [DEBUG-VISION] ANALYSIS COMPLETE: Found {len(all_form_fields)} total fields in document. ---")
         
-        return json.dumps({"form_fields": list(merged_fields.values())}, indent=2)
+        if not all_form_fields:
+            return '{"error": "No form fields were found using local heuristics."}'
+
+        # Remove duplicate fields by name, keeping the first one found.
+        final_fields = {f["field_name"]: f for f in reversed(all_form_fields)}.values()
+        return json.dumps({"form_fields": list(final_fields)}, indent=2)
 
     except Exception as e:
-        return f'{{"error": "An error occurred during local heuristic extraction: {type(e).__name__} - {str(e)}"}}'
+        error_message = f'{{"error": "An error occurred in local heuristics: {type(e).__name__} - {str(e)}"}}'
+        print(f"[DEBUG-VISION] Exception during analysis: {error_message}")
+        return error_message
 
 # ============================================
 # PDF Manipulation & Blueprint Tools

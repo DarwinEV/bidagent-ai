@@ -323,4 +323,50 @@ Previous implementations separated PDF form filling and form field detection, la
 - Form field data is stored in a standardized JSON format, ready for the PDF filler agent to complete the document.
 - The agent structure is modular, extensible, and future-proofed for additional document automation features.
 
+# Bid Agent Update & Strategy Log
+
+## Phase 5: A New Strategy for High-Performance Field Detection
+
+### The Problem
+Despite multiple iterations, the agent is unable to reliably and quickly identify all fillable fields from visual cues (i.e., underscore lines `_________`). The agent's dialogue shows a total failure across all three tiers of its strategy, resulting in no fields being found. This indicates our previous approaches have been fundamentally flawed.
+
+### 1. Root Cause Analysis & Lessons Learned
+
+Our journey has been a series of trials that have revealed critical truths:
+
+*   **Google Cloud Tools are Unsuitable for this Task:**
+    *   **`analyze_document_with_docai` (Form Parser):** This tool is designed for structured PDF forms (AcroForms) and is blind to visual cues like underscore lines. It consistently and correctly finds nothing in our target document.
+        *   **Conclusion:** This tool is not fit for this purpose and should be deprecated from this workflow.
+    *   **`run_ocr_and_extract_fields` (Cloud OCR):** This tool is *too* intelligent. It correctly identifies `_________` as a graphical line, not a string of text characters. As a result, it reports "no underscore characters found."
+        *   **Conclusion:** This tool, while powerful, is the wrong tool for finding underscore-based fields.
+
+*   **The Local Heuristic (`extract_fields_with_local_heuristics`) is Our Only Viable Path:**
+    *   The `PyMuPDF` library is the **only** tool that has shown any success in identifying both text-based underscores and vector graphics. Every small victory has come from this tool. Our failures have stemmed from how we used it.
+
+*   **Performance is the True Enemy:**
+    *   The most capable version of our local tool, which searched for text and vector drawings (`page.get_drawings()`), was unacceptably slow because it had to inspect every single graphical object on the page.
+    *   My subsequent attempt to "optimize" this by searching only in "empty zones" was a catastrophic logical error. It made the agent blind to the vast majority of the page, causing the current total failure.
+
+### 2. The New, Definitive Plan: High-Speed Vector Analysis
+
+The slow performance of a full-page drawing analysis is the final obstacle. We will defeat it not by avoiding it, but by replacing it with a far superior weapon from the `PyMuPDF` arsenal, combined with a new technique. This mirrors the likely approach of professional, high-speed tools like Apple's.
+
+*   **Step 1: Abandon Generic `get_drawings()` for a Specialized Approach.** We will stop using the slow, generic `page.get_drawings()` method.
+
+*   **Step 2: Isolate All Vector Graphics Instantly.** We will use `page.get_image_info(vectors=True)` to generate a clean, high-resolution image containing *only* the vector graphics (lines, rectangles, etc.), with all text removed. This is an incredibly fast and efficient way to get a "tracing" of the page's structure.
+
+*   **Step 3: Use Computer Vision to Find Lines.** On this clean "vector image," we will use a lightweight, fast computer vision library (`opencv-python-headless`) to instantly find all horizontal lines using a Hough Line Transform. This is what computer vision is built for and is orders of magnitude faster than iterating through PDF objects.
+
+*   **Step 4: Correlate Lines with Text.** Once we have the precise coordinates of all lines from the computer vision analysis, we will correlate them with the page's text (obtained via the fast `page.get_text("words")` method) to find their labels.
+
+*   **Step 5: Merge with Text-Based Underscores.** We will still run our fast, text-only search for `_` characters as a parallel strategy. The results from both the computer vision analysis and the text search will be merged to create one complete, final list of fields.
+
+### 3. Execution Path
+
+1.  **Update Dependencies:** Add `opencv-python-headless` and `numpy` to `backend/requirements.txt` to enable high-speed computer vision analysis.
+2.  **Overhaul `extract_fields_with_local_heuristics`:** Completely rewrite the function to implement the new High-Speed Vector Analysis plan.
+3.  **Simplify Agent Prompt:** The agent's tiered strategy is overly complex and has failed. We will simplify the prompt to **only** use the new, powerful local heuristic tool. The other cloud tools will be removed from the primary workflow to prevent the agent from making incorrect choices on this type of document.
+
+This plan is robust, addresses the root cause (performance), and is based on a sound technical approach that will deliver the speed and accuracy we require.
+
 </rewritten_file>
