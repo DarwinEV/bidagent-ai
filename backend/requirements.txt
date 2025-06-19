@@ -1,12 +1,12 @@
-Flask==2.3.3
+Flask==3.0.3
 flask-cors==4.0.0
-python-dotenv==1.0.0
-firebase-admin==6.2.0
-google-cloud-pubsub==2.18.1
+python-dotenv==1.0.1
+firebase-admin==6.5.0
+google-cloud-pubsub==2.22.0
 google-cloud-storage==2.19.0
 google-cloud-firestore==2.13.1
 google-cloud-secret-manager==2.23.3
-google-cloud-documentai==2.22.0
+google-cloud-documentai==2.29.1
 sendgrid==6.10.0
 PyPDF2==3.0.1
 Jinja2==3.1.2
@@ -16,10 +16,10 @@ gunicorn==21.2.0
 google-cloud-aiplatform==1.92.0
 google-genai==1.14.0
 gitpython==3.1.40
-google-adk==0.5.0
+google-adk==0.2.0
 selenium==4.33.0
 pillow==11.2.1
-PyMuPDF==1.26.1
+PyMuPDF==1.24.6
 opencv-python-headless>=4.0
 numpy>=1.20
 
@@ -34,3 +34,7 @@ beautifulsoup4
 lxml
 html5lib
 pymupdf4llm
+
+# Added from the code block
+azure-ai-documentintelligence
+azure-identity

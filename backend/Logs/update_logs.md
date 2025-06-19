@@ -1,3 +1,50 @@
+# Update 10: The Azure Migration
+
+## 1. Objective
+To transition the entire document analysis and field identification workflow from Google Cloud Document AI to Azure Document Intelligence. This migration is driven by the need for a more robust, scalable, and secure solution that can more accurately identify potential form field locations on any given document.
+
+## 2. Analysis of the Problem
+Our previous solution using Google's Document AI services proved unable to consistently identify all the form fields we required. Furthermore, the user has requested we use Azure as it is more scalable and better for handling sensitive information. The multi-agent "Triumvirate" system we built for Google was also complex. Azure's capabilities allow for a significant simplification.
+
+## 3. Proposed Solution - Step-by-Step
+
+### Step 1: Update Environment
+-   **File:** `backend/requirements.txt`
+    -   **Action:** Add `azure-ai-documentintelligence` and `azure-identity`.
+-   **File:** `backend/config.py`
+    -   **Action:** Add new configuration variables for Azure credentials: `AZURE_DOC_INTEL_ENDPOINT = ""` and `AZURE_DOC_INTEL_KEY = ""`.
+
+### Step 2: Architect the New Azure-based Agent System
+-   **Action: Retire Old Agents.** Delete the directories for the Google-specific agents:
+    -   `backend/agents/document_automation_manager/sub_agents/docai_tool_agent/`
+    -   `backend/agents/document_automation_manager/sub_agents/ocr_tool_agent/`
+
+-   **Action: Create the `azure_tool_agent`**.
+    -   **Location:** `backend/agents/document_automation_manager/sub_agents/azure_tool_agent/`
+    -   **`tools.py`**: This file will contain a single, powerful tool, `analyze_document_layout`.
+        -   This tool will initialize the `DocumentIntelligenceClient` using the new credentials from `config.py`.
+        -   It will take a file path as input and use the `"prebuilt-layout"` model to analyze the document.
+        -   It will iterate through the `AnalyzeResult` to extract all words, their content, and their bounding box polygons (`word.polygon`).
+        -   It will return a structured JSON object containing a list of all words with their coordinates.
+    -   **`agent.py`**: This will define the `azure_tool_agent`, equipping it with the `analyze_document_layout` tool. Its prompt will be simple, focused on executing the tool when asked.
+
+### Step 3: Update the Manager and Formatter Agents
+-   **File:** `backend/agents/document_automation_manager/agent.py`
+    -   **Action:** Modify the `document_automation_manager`.
+    -   Remove the old `docai_tool_agent` and `ocr_tool_agent` from its `sub_agents` list.
+    -   Add the new `azure_tool_agent` to its `sub_agents` list.
+-   **File:** `backend/agents/document_automation_manager/prompt.py`
+    -   **Action:** Update the `AUTOMATION_MANAGER_PROMPT`. The manager's logic will be simplified. It will no longer need to decide between multiple tool agents. Its primary role will be to receive the user's file, pass it to the `azure_tool_agent` for layout analysis, and then pass the resulting coordinate data to the `json_formatter_agent` for the final blueprint creation.
+
+-   **File:** `backend/agents/document_automation_manager/sub_agents/json_formatter_agent/prompt.py`
+    -   **Action:** Update the formatter's prompt to understand the new input data structure coming from the `azure_tool_agent`. It will continue to be responsible for the high-level reasoning of identifying field labels (e.g., "Company Name:") and determining the correct coordinates for placing a new input field based on the Azure tool's output.
+
+## 4. Expected Outcome
+-   A fully functional document analysis pipeline powered by Azure Document Intelligence.
+-   A simpler and more maintainable agent architecture.
+-   The system will be able to take any PDF, analyze its layout to find the coordinates of all text, and then generate a JSON blueprint identifying where new form fields should be created.
+-   All dependencies on Google's Document AI will be removed from the project.
+
 # Update 2: Intelligent Search Query Enhancement
 
 ## 1. Objective
@@ -369,4 +416,87 @@ The slow performance of a full-page drawing analysis is the final obstacle. We w
 
 This plan is robust, addresses the root cause (performance), and is based on a sound technical approach that will deliver the speed and accuracy we require.
 
-</rewritten_file>
+# Update 7: Explicit Underscore Blueprint
+
+## 1. Objective
+To significantly improve the clarity and accuracy of the form field identification process. The agent will be updated to explicitly capture the raw underscore text (`"_______"`) from the document, include it in the generated JSON blueprint, and present it to the user in its summary.
+
+## 2. Analysis of the Problem
+The current heuristic-based field identification is struggling. It often misidentifies the text label associated with an underscore line, leading to confusing and inaccurate field names. The user has no way to verify which visual field on the PDF corresponds to the name the agent has generated. By capturing the underscore text itself, we create a direct visual anchor between the blueprint and the original document.
+
+## 3. Execution Plan
+
+### Step 1: Enhance the Field Extraction Logic (`tools.py`)
+-   **File to Modify:** `backend/agents/document_automation_manager/tools.py`
+-   **Function to Modify:** `run_ocr_and_extract_fields`
+-   **Action 1: Capture Raw Underscore Text:** During the "Merge adjacent underscore tokens" step, in addition to merging the bounding boxes, I will concatenate the `text` of each token. This will create a string like `"_____________"`.
+-   **Action 2: Update the JSON Blueprint Structure:** I will add a new key, `placeholder_text`, to the JSON object created for each form field. This key will hold the concatenated underscore string. The final field object will look like this:
+    ```json
+    {
+      "field_name": "Name",
+      "placeholder_text": "____________________",
+      "field_type": "text",
+      "page_number": 1,
+      "coordinates": [...]
+    }
+    ```
+
+### Step 2: Update the Agent's Prompt (`prompt.py`)
+-   **File to Modify:** `backend/agents/document_automation_manager/prompt.py`
+-   **Section to Modify:** `Part 2: Confirm & Request Data`
+-   **Action:** I will modify the prompt to instruct the agent to use this new `placeholder_text`. The agent's summary to the user should now include both the field name and the placeholder.
+-   **New Prompt Instruction:**
+    > "Announce that the blueprint was created, provide the captured path, and list the fields found. For each field, display both the `field_name` and its corresponding `placeholder_text` to give the user clear visual context (e.g., `Field 'BID OF': _________________`). Then, ask the user for the data to fill them."
+
+## 4. Expected Outcome
+-   The JSON blueprint will be more robust and contain the exact underscore text for each field.
+-   The agent's summary will be far more intuitive. The user will be able to look at the agent's output and immediately see which line on the PDF it corresponds to.
+-   This will dramatically improve the user experience and the overall accuracy of the form-filling process.
+
+# Update Logs
+
+## 2024-07-16: Plan for Intelligent Form Field Extraction
+
+The OCR output using native PDF parsing is now highly accurate and reliably includes underscore characters. The next step is to implement a robust strategy to convert this raw text into a structured JSON blueprint for form field creation.
+
+### The Plan
+
+The core challenge is to translate the raw text, which contains lines of underscores, into a structured JSON "blueprint" that defines the name, location, and page number for each form field. Since we have the full Document AI `document` object available (which contains text, tokens, and their coordinates), we can implement a robust, token-based strategy.
+
+1.  **Restore and Refine the `run_ocr_and_extract_fields` Function:**
+    *   The function in `backend/agents/document_automation_manager/tools.py` will be restored to its purpose of *extracting fields*, not just dumping debug info.
+    *   It will continue to use the `enable_native_pdf_parsing` option, as this provides the high-quality text we're now seeing.
+
+2.  **Implement Token-Based Field Detection Logic:**
+    The previous implementation was on the right track but had flaws in associating labels with fields. A new, more resilient version will be written with the following logic for each page in the document:
+    *   **Partition Tokens:** Iterate through every token on the page. A token is the smallest unit of text with coordinate data (e.g., a single word or a group of underscores).
+        *   If a token consists primarily of underscores (e.g., `_`, `___`, `_______`), classify it as a `field_token`.
+        *   All other tokens are classified as `label_tokens`.
+    *   **Merge Field Tokens:** A single fillable line might be recognized as multiple, adjacent `field_tokens`. These will be merged into a single logical field area by combining their bounding boxes. This correctly handles long lines of `_________`.
+    *   **Associate Labels with Fields:** For each merged field area, find the most plausible text label. The logic will search for `label_tokens` that are:
+        *   **To the Left:** Immediately preceding the field on the same horizontal line.
+        *   **Directly Above:** On the line immediately above the field, in vertical alignment.
+        This dual-check approach correctly handles common form layouts.
+    *   **Filter Out Signatures:** Any identified field whose label contains "signature", "signatory", or similar terms will be ignored to prevent creating fields in signature blocks.
+
+3.  **Construct the JSON Blueprint:**
+    *   For each valid field found, a JSON object will be created containing:
+        *   `field_name`: The cleaned text label (e.g., "BID OF").
+        *   `page_number`: The page the field was found on.
+        *   `coordinates`: The bounding box of the merged underscore area.
+        *   `placeholder_text`: The raw underscore text (e.g., "_________________"), which is useful for user verification.
+    *   The function will return a final JSON array of these objects, which the agent can then use to create the PDF form.
+
+This plan is robust because it doesn't rely on fragile line-by-line parsing. By operating on tokens and their coordinates, it can handle complex layouts where labels and fields are not perfectly aligned.
+
+## Update 12: The Loop Break and Restoration of Field Checking
+
+1.  **Stabilize the Azure Tool:** The infinite loop originates from the `azure_tool_agent`. The tool that calls Azure's analysis service appears to be returning a "processing" status instead of waiting for the final result. I will modify the `analyze_document_layout` tool to ensure it's a synchronous, blocking operation from the agent's perspective. It will only return the complete and final JSON from Azure, or an error, never an intermediate status. This will prevent the `document_automation_manager` from re-triggering it.
+
+2.  **Fortify the Manager's Logic:** The `document_automation_manager`'s prompt will be further refined. I will make its workflow even more rigid and explicit to prevent any ambiguity. The new logic will be:
+    *   **State 1 (Check Fields):** Use the `list_existing_pdf_fields` tool.
+    *   **State 2 (Analyze Layout):** If and only if State 1 returns no fields or fails, delegate **once** to `azure_tool_agent`.
+    *   **State 3 (Create Blueprint):** If and only if State 2 succeeds, delegate **once** to `json_formatter_agent` with the result.
+    *   **State 4 (End):** Report the final output and terminate.
+
+3.  **Address Field Checking Degradation:** The field-checking is "not the same as before." The current tool returns a natural language string (`"Found existing form fields: ..."`, `"No existing...found"`, or an error message). This is likely too ambiguous for the LLM to handle reliably. I will modify the `list_existing_pdf_fields` tool to return a structured JSON string instead (e.g., `{"status": "success", "fields": ["field1", "field2"]}` or `{"status": "no_fields_found"}` or `{"status": "error", "message": "..."}`). This will make the output machine-readable and allow the manager agent to make a more deterministic decision.

@@ -34,6 +34,10 @@ def load_config():
         # General
         'FLASK_ENV': os.environ.get('FLASK_ENV', 'production'),
         
+        # Azure Document Intelligence
+        'AZURE_DOC_INTEL_ENDPOINT': os.environ.get('AZURE_DOC_INTEL_ENDPOINT'),
+        'AZURE_DOC_INTEL_KEY': os.environ.get('AZURE_DOC_INTEL_KEY'),
+        
         # Google Cloud & Firebase
         'GOOGLE_APPLICATION_CREDENTIALS': os.environ.get('GOOGLE_APPLICATION_CREDENTIALS'), # Path to your service account key file
         'FIREBASE_PROJECT_ID': os.environ.get('FIREBASE_PROJECT_ID'),

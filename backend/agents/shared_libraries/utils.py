@@ -23,10 +23,13 @@ def get_output_path(original_path: str, suffix: str, new_extension: str = "pdf",
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
         
-    base_name = os.path.splitext(os.path.basename(original_path))[0]
+    # Correctly get the base name without any extensions
+    base_name = os.path.basename(original_path)
+    # Split on the first dot to handle names like 'file.rev1.pdf'
+    true_base_name = base_name.split('.')[0]
     
     if clean_base_name:
-        base_name = base_name.replace('_fields_created', '')
+        true_base_name = true_base_name.replace('_fields_created', '')
 
-    new_filename = f"{base_name}{suffix}.{new_extension}"
+    new_filename = f"{true_base_name}{suffix}.{new_extension}"
     return os.path.join(output_dir, new_filename) 
