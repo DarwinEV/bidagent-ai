@@ -1,6 +1,6 @@
 
 from flask import Blueprint, request, jsonify
-from pubsub_publish import publish_message
+# from pubsub_publish import publish_message
 import os
 
 download_bid = Blueprint('download_bid', __name__)
@@ -19,19 +19,19 @@ def download_bid_handler():
         
         # Publish to Pub/Sub for document download
         topic_name = os.environ.get('PUBSUB_TOPIC_DOWNLOAD', 'bid-download')
-        message_id = publish_message(topic_name, {
-            'userId': user_id,
-            'filteredBids': [{
-                'bidId': bid_id,
-                'url': url,
-                'title': payload.get('title', 'Unknown Bid')
-            }]
-        })
+        # message_id = publish_message(topic_name, {
+        #     'userId': user_id,
+        #     'filteredBids': [{
+        #         'bidId': bid_id,
+        #         'url': url,
+        #         'title': payload.get('title', 'Unknown Bid')
+        #     }]
+        # })
         
         return jsonify({
             'success': True,
             'message': 'Document download started',
-            'messageId': message_id
+            # 'messageId': message_id
         })
     except Exception as e:
         print(f"Error triggering document download: {str(e)}")

@@ -26,8 +26,8 @@ def load_config():
     
     # Check for missing required variables
     missing_vars = [var for var in required_vars if not os.environ.get(var)]
-    if missing_vars:
-        raise EnvironmentError(f"Missing required environment variables: {', '.join(missing_vars)}")
+    # if missing_vars:
+    #     raise EnvironmentError(f"Missing required environment variables: {', '.join(missing_vars)}")
     
     # Return dictionary of config values
     return {

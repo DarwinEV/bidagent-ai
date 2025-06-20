@@ -1,3 +1,7 @@
+'use client';
+// Connect frontend and pass bid search request to backend ✅
+// Test whether the connection is working ⌛
+// TO DO: Update firebase storage paths in this file below to use Clerk User Details. ⌛
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -9,6 +13,20 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Search, MapPin, Calendar, Building, ExternalLink, Eye } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { db } from "@/lib/firebase";
+import { collection, doc, setDoc } from "firebase/firestore";
+
+type Bid = {
+  id: string;
+  title: string;
+  status: string;
+  agency: string;
+  location: string;
+  deadline: string;
+  description: string;
+  relevanceScore: number;
+  portal: string;
+};
 
 export const BidDiscoveryTab = () => {
   const [isDiscovering, setIsDiscovering] = useState(false);
@@ -18,44 +36,8 @@ export const BidDiscoveryTab = () => {
     geography: "",
     portals: [] as string[]
   });
+  const [discoveredBids, setDiscoveredBids] = useState<Bid[]>([]);
   const { toast } = useToast();
-
-  // Mock data for discovered bids
-  const [discoveredBids] = useState([
-    {
-      id: "bid-001",
-      title: "HVAC Replacement for Building 42",
-      agency: "State University of California",
-      deadline: "2025-07-15",
-      location: "Sacramento, CA",
-      description: "Replace existing HVAC system with energy-efficient units...",
-      portal: "SAM.gov",
-      relevanceScore: 0.92,
-      status: "new"
-    },
-    {
-      id: "bid-002", 
-      title: "Plumbing Maintenance Services",
-      agency: "City of San Francisco",
-      deadline: "2025-06-30",
-      location: "San Francisco, CA",
-      description: "Annual plumbing maintenance for municipal buildings...",
-      portal: "CA State Portal",
-      relevanceScore: 0.87,
-      status: "analyzed"
-    },
-    {
-      id: "bid-003",
-      title: "Electrical Infrastructure Upgrade",
-      agency: "Regional Transit Authority",
-      deadline: "2025-08-01",
-      location: "Los Angeles, CA", 
-      description: "Upgrade electrical systems for transit stations...",
-      portal: "Local Portal",
-      relevanceScore: 0.81,
-      status: "pre-filled"
-    }
-  ]);
 
   const portals = [
     { id: "sam", name: "SAM.gov (Federal)", checked: true },
@@ -67,22 +49,65 @@ export const BidDiscoveryTab = () => {
 
   const handleStartDiscovery = async () => {
     setIsDiscovering(true);
+    toast({
+      title: "Discovery In Progress...",
+      description: "Sending request to the server...",
+    });
+
     try {
-      // TODO: Call Flask API endpoint /api/start_discovery
-      await new Promise(resolve => setTimeout(resolve, 3000));
-      
+      // update the url to use next public api url 
+      const response = await fetch('http://127.0.0.1:5000/api/start_discovery', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: 'user-123', // Replace with actual user ID
+          ...searchParams
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Server responded with status ${response.status}`);
+      }
+
+      const data = await response.json();
+      setDiscoveredBids(data.bids || []);
+
       toast({
         title: "Discovery Started!",
-        description: "AI agents are now searching for relevant opportunities.",
+        description: "AI agents found new opportunities.",
       });
-    } catch (error) {
+    } catch (error: any) {
       toast({
         title: "Error",
-        description: "Failed to start discovery. Please try again.",
+        description: `Discovery failed: ${error.message}`,
         variant: "destructive",
       });
     } finally {
       setIsDiscovering(false);
+    }
+  };
+  const saveBid = async (bid: Bid) => {
+    try {
+      toast({
+        title: "Saving Bid...",
+        description: `Saving "${bid.title}" to your dashboard.`,
+      });
+
+      await setDoc(
+        doc(collection(db, "users", "user-123", "savedBids"), bid.id),
+        bid
+      );
+
+      toast({
+        title: "Bid Saved!",
+        description: `Bid "${bid.title}" has been saved successfully.`
+      });
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: `Failed to save bid: ${error.message}`,
+        variant: "destructive",
+      });
     }
   };
 
@@ -90,7 +115,7 @@ export const BidDiscoveryTab = () => {
     switch (status) {
       case "new":
         return <Badge className="bg-blue-100 text-blue-800">New</Badge>;
-      case "analyzed": 
+      case "analyzed":
         return <Badge className="bg-yellow-100 text-yellow-800">Analyzed</Badge>;
       case "pre-filled":
         return <Badge className="bg-green-100 text-green-800">Pre-filled</Badge>;
@@ -162,14 +187,24 @@ export const BidDiscoveryTab = () => {
             <div className="mt-2 space-y-2">
               {portals.map((portal) => (
                 <div key={portal.id} className="flex items-center space-x-2">
-                  <Checkbox id={portal.id} defaultChecked={portal.checked} />
+                  <Checkbox
+                    id={portal.id}
+                    defaultChecked={portal.checked}
+                    onChange={(e) => {
+                      const checked = (e.target as HTMLInputElement).checked;
+                      const updatedPortals = checked
+                        ? [...searchParams.portals, portal.id]
+                        : searchParams.portals.filter(p => p !== portal.id);
+                      setSearchParams(prev => ({ ...prev, portals: updatedPortals }));
+                    }}
+                  />
                   <Label htmlFor={portal.id} className="cursor-pointer">{portal.name}</Label>
                 </div>
               ))}
             </div>
           </div>
 
-          <Button 
+          <Button
             onClick={handleStartDiscovery}
             disabled={isDiscovering}
             className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
@@ -190,83 +225,73 @@ export const BidDiscoveryTab = () => {
       </Card>
 
       {/* Discovered Bids */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Discovered Opportunities</CardTitle>
-          <CardDescription>
-            Recent opportunities found by your discovery agents
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {discoveredBids.map((bid) => (
-              <Card key={bid.id} className="border hover:shadow-md transition-shadow">
-                <CardContent className="p-4">
-                  <div className="flex justify-between items-start mb-3">
-                    <div className="flex-1">
-                      <div className="flex items-center space-x-2 mb-1">
-                        <h3 className="font-semibold text-lg">{bid.title}</h3>
-                        {getStatusBadge(bid.status)}
-                      </div>
-                      <div className="flex items-center space-x-4 text-sm text-gray-600 mb-2">
-                        <div className="flex items-center">
-                          <Building className="w-4 h-4 mr-1" />
-                          {bid.agency}
+      {discoveredBids.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Discovered Opportunities</CardTitle>
+            <CardDescription>
+              Recent opportunities found by your discovery agents
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {discoveredBids.map((bid) => (
+                <Card key={bid.id} className="border hover:shadow-md transition-shadow">
+                  <CardContent className="p-4">
+                    <div className="flex justify-between items-start mb-3">
+                      <div className="flex-1">
+                        <div className="flex items-center space-x-2 mb-1">
+                          <h3 className="font-semibold text-lg">{bid.title}</h3>
+                          {getStatusBadge(bid.status)}
                         </div>
-                        <div className="flex items-center">
-                          <MapPin className="w-4 h-4 mr-1" />
-                          {bid.location}
+                        <div className="flex items-center space-x-4 text-sm text-gray-600 mb-2">
+                          <div className="flex items-center">
+                            <Building className="w-4 h-4 mr-1" />
+                            {bid.agency}
+                          </div>
+                          <div className="flex items-center">
+                            <MapPin className="w-4 h-4 mr-1" />
+                            {bid.location}
+                          </div>
+                          <div className="flex items-center">
+                            <Calendar className="w-4 h-4 mr-1" />
+                            Due: {new Date(bid.deadline).toLocaleDateString()}
+                          </div>
                         </div>
-                        <div className="flex items-center">
-                          <Calendar className="w-4 h-4 mr-1" />
-                          Due: {new Date(bid.deadline).toLocaleDateString()}
+                        <p className="text-gray-700 text-sm">{bid.description}</p>
+                      </div>
+                      <div className="text-right ml-4">
+                        <div className={`text-sm font-medium ${getRelevanceColor(bid.relevanceScore)}`}>
+                          {Math.round(bid.relevanceScore * 100)}% match
+                        </div>
+                        <div className="text-xs text-gray-500 mt-1">
+                          via {bid.portal}
                         </div>
                       </div>
-                      <p className="text-gray-700 text-sm">{bid.description}</p>
                     </div>
-                    <div className="text-right ml-4">
-                      <div className={`text-sm font-medium ${getRelevanceColor(bid.relevanceScore)}`}>
-                        {Math.round(bid.relevanceScore * 100)}% match
+
+                    <div className="flex justify-between items-center pt-3 border-t">
+                      <div className="flex space-x-2">
+                        <Button size="sm" variant="outline">
+                          <Eye className="w-4 h-4 mr-1" />
+                          View Details
+                        </Button>
+                        <Button size="sm" variant="outline">
+                          <ExternalLink className="w-4 h-4 mr-1" />
+                          Original Portal
+                        </Button>
                       </div>
-                      <div className="text-xs text-gray-500 mt-1">
-                        via {bid.portal}
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className="flex justify-between items-center pt-3 border-t">
-                    <div className="flex space-x-2">
-                      <Button size="sm" variant="outline">
-                        <Eye className="w-4 h-4 mr-1" />
-                        View Details
-                      </Button>
-                      <Button size="sm" variant="outline">
-                        <ExternalLink className="w-4 h-4 mr-1" />
-                        Original Portal
+                      <Button size="sm" onClick={() => saveBid(bid)} className="bg-green-600 hover:bg-green-700">
+                        Save
                       </Button>
                     </div>
-                    {bid.status === "new" && (
-                      <Button size="sm">
-                        Analyze Document
-                      </Button>
-                    )}
-                    {bid.status === "analyzed" && (
-                      <Button size="sm">
-                        Pre-fill Forms
-                      </Button>
-                    )}
-                    {bid.status === "pre-filled" && (
-                      <Button size="sm" className="bg-green-600 hover:bg-green-700">
-                        Ready to Submit
-                      </Button>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 };
