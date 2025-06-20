@@ -1,12 +1,12 @@
 Flask[async]==2.3.3
 flask-cors==4.0.0
-python-dotenv==1.0.0
-firebase-admin==6.2.0
-google-cloud-pubsub==2.18.1
+python-dotenv==1.0.1
+firebase-admin==6.5.0
+google-cloud-pubsub==2.22.0
 google-cloud-storage==2.19.0
 google-cloud-firestore==2.13.1
-google-cloud-secret-manager==2.16.0
-google-cloud-documentai==2.22.0
+google-cloud-secret-manager==2.23.3
+google-cloud-documentai==2.29.1
 sendgrid==6.10.0
 PyPDF2==3.0.1
 Jinja2==3.1.2
@@ -19,4 +19,22 @@ gitpython==3.1.40
 google-adk>=1.2.1
 selenium==4.33.0
 pillow==11.2.1
-PyMuPDF==1.26.0
+PyMuPDF==1.24.6
+opencv-python-headless>=4.0
+numpy>=1.20
+
+# Agent & LLM Dependencies
+google-generativeai
+google-ads
+langchain
+google-cloud-discoveryengine
+protobuf
+requests
+beautifulsoup4
+lxml
+html5lib
+pymupdf4llm
+
+# Added from the code block
+azure-ai-documentintelligence
+azure-identity
