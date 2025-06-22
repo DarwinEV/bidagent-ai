@@ -1,1 +1,0 @@
-# This file makes the 'document_automation_manager' directory a Python package. 

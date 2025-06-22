@@ -1,5 +1,95 @@
 # Change Log
 
+## [Current Version] - YYYY-MM-DD
+
+### Major Overhaul: Implementation of CV-Enhanced Tooling and Structured Workflow
+
+- **Goal:** To significantly upgrade the agent's capabilities by reinstating a powerful, computer-vision-based toolset and adopting a more structured, robust workflow for analysis and processing.
+
+### Added
+- **Advanced `extract_fields_with_local_heuristics` Tool:** The fallback analysis tool in `tools.py` has been replaced with a much more sophisticated version that uses OpenCV (`cv2`) and `numpy` to perform computer vision analysis on the document, detecting lines and filtering them to identify potential fields.
+- **`merge_overlapping_rects` Utility:** A new utility for merging bounding boxes has been added to improve the accuracy of field detection.
+- **`save_json_to_file` Tool:** A dedicated tool for saving the generated field blueprint to a file has been added. This is a required step in the new workflow.
+
+### Changed
+- **Agent Prompt (`prompt.py`):** The prompt has been completely rewritten to be more structured and conversational, inspired by the `AUTOMATION_MANAGER_PROMPT` template.
+    - **Structured Workflow:** The new prompt lays out a clear, multi-part workflow (Triage, Blueprint Handling, Creation, Filling).
+    - **JSON-Based Communication:** The agent is now instructed to parse JSON responses from all tools, making its decision-making more reliable.
+    - **Mandatory Blueprint Saving:** The agent must now call `save_json_to_file` after a successful analysis before it can proceed to create the fillable PDF.
+- **Tool Renaming and Signatures:**
+    - `list_existing_pdf_fields` is now `list_pdf_form_fields`.
+    - `create_fields_on_pdf_from_blueprint` is now `create_fields_from_blueprint` and requires a file path to the JSON blueprint.
+    - `fill_pdf_fields` is now `fill_form_fields`.
+- **All tools now return JSON strings** for consistent and reliable parsing by the agent.
+
+---
+*Previous strategic decisions are logged below for historical reference.*
+---
+
+### Strategic Update: OCR-First Analysis
+- **Goal:** Based on user feedback, the analysis strategy has been reversed to prioritize OCR. The agent will now attempt to use the more powerful cloud-based analysis first before falling back to local, non-OCR methods.
+
+### Changed
+- **Reversed Tiers in Agent Prompt:** The core prompt in `document_processing_agent/prompt.py` has been updated to reflect the new "OCR-First" strategy:
+    1.  **Tier 1 (Primary):** The agent will now always start with the `create_form_field_blueprint_from_azure` tool.
+    2.  **Tier 2 (Fallback):** If the Azure OCR tool fails to produce a blueprint, the agent will then attempt to use the `extract_fields_with_local_heuristics` tool.
+- This reverses the previous "Local-First" strategy, making the comprehensive OCR analysis the default starting point.
+
+---
+*Previous strategic decisions are logged below for historical reference.*
+---
+
+### Major Strategic Shift: Re-implementation of Two-Tiered Document Analysis
+
+- **Goal:** To fix the agent's regression where it was incorrectly defaulting to a single, ineffective Azure-based tool and failing on simple digital PDFs. This change re-introduces a more robust, efficient, and logical workflow.
+
+### Added
+- **`extract_fields_with_local_heuristics` Tool:** Re-introduced the Tier-1 tool in `document_processing_agent/tools.py`. This tool uses `PyMuPDF` to perform fast, local analysis of vector-based drawings (i.e., lines that look like `____`) to identify form fields. This is now the agent's first step for making a PDF fillable.
+- **Two-Tier Logic in Agent Prompt:** The core prompt in `document_processing_agent/prompt.py` has been completely rewritten to enforce the new strategy:
+    1.  **Tier 1:** Always attempt to use `extract_fields_with_local_heuristics` first.
+    2.  **Tier 2 (Fallback):** If the local tool fails, escalate to the `create_form_field_blueprint_from_azure` tool.
+
+### Changed
+- **Purpose of the Azure Tool:** The `create_form_field_blueprint_from_azure` tool has been reframed. While it still attempts a basic heuristic (finding labels ending in a colon), its primary purpose is now to **generate and save raw OCR data**.
+- **Azure Tool Output:** The tool now saves a `_azure_raw_analysis.json` file to the `output/` directory and includes the path in its return message. This is a critical step for our ongoing project to develop more advanced, custom heuristics based on full OCR data.
+- **Agent Instructions:** The agent is now explicitly instructed to inform the user when the raw Azure output is saved, framing it as a necessary step for future improvements if the initial heuristics fail.
+
+### Deprecated
+- **Old Single-Path Logic:** The previous, rigid workflow that relied solely on a single, underperforming Azure tool has been entirely removed from the agent's prompt.
+- **The name `document_automation_manager` has been removed and replaced with `document_processing_agent`.**
+- **The old `analyze_document_with_docai` tool has been removed.** The new Azure tool is more targeted.
+- **The reliance on Google DocAI has been completely replaced by an Azure-based workflow.**
+- **The heuristic of identifying `____` as text has been replaced with a more robust method of detecting vector lines with PyMuPDF.**
+- **Corrected `PyMuPDF` versioning issues that previously blocked progress.**
+- **Refactored agent architecture to remove conversational sub-agents in favor of direct tool calls by a manager agent.**
+- **Resolved environment configuration issues by standardizing `.env` file usage and adding `check_configuration` tools.**
+
+### Fixed
+- The agent will no longer get stuck attempting to use a single, ineffective tool on digital PDFs. The `local-first` approach provides a fast path to success for many documents and a logical fallback for more complex ones.
+
+## [2024-06-11] - Strategic Pivot to Azure Document Intelligence
+
+### Objective
+Migrate the document analysis backend from Google Cloud Document AI to Azure Document Intelligence to leverage a more scalable and secure platform better suited for sensitive information and to overcome limitations in form field detection.
+
+### Changes Made
+
+1.  **Platform Shift**:
+    *   Initiated the replacement of all `google-cloud-aiplatform` and `google-cloud-documentai` dependencies and logic.
+    *   The new implementation will use the `azure-ai-documentintelligence` Python SDK.
+
+2.  **Architectural Simplification**:
+    *   The previous "Triumvirate" of Google-specific agents (OCR, Form Parser, JSON Formatter) will be replaced by a more streamlined architecture centered around a single, powerful Azure tool agent.
+    *   Azure's `"prebuilt-layout"` model can handle both text/coordinate extraction and key-value pair identification, simplifying our agent design.
+
+### Expected Result
+*   A more robust and scalable document analysis pipeline.
+*   Improved handling of sensitive documents through Azure's enterprise-grade services.
+*   Resolution of previous issues where the Google-based agent failed to identify all necessary form fields in complex documents.
+*   A simpler, more maintainable agent architecture.
+
+---
+
 ## [2024-06-07] - Refactored PDF Tools for Robustness
 
 ### Objective
@@ -204,5 +294,53 @@ Refactor the agent interaction flow to eliminate redundant information gathering
 *   The `bid_search_agent` is now solely responsible for gathering bid discovery details (keywords, portals, etc.) from the user and initiating the web search, ensuring the browser tab is opened only after collecting the necessary information.
 *   Code readability is improved by renaming the RAG agent.
 
+## [2024-06-10] - Iterative Debugging & Heuristic Enhancement
+
+### Objective
+Systematically identify and resolve a series of cascading errors in the document automation workflow, including library compatibility issues, file path errors, and logical flaws, while iteratively improving the precision of the form field extraction tools based on user feedback.
+
+### Changes Made
+
+1.  **Fixed Library Incompatibility (`AttributeError`)**:
+    *   Identified that the `fitz.TextWidget` class was not available in the installed version of `PyMuPDF`.
+    *   Refactored the `create_fields_from_blueprint` tool in `document_automation_manager/tools.py` to use the older, more compatible `fitz.Widget` method, ensuring the code works without requiring a library upgrade.
+
+2.  **Repaired File Path Logic (`TypeError`)**:
+    *   Diagnosed that a `TypeError` was caused by a faulty `get_output_path` utility function that was missing a required `clean_base_name` parameter.
+    *   Corrected the function signature in `shared_libraries/utils.py` to restore the missing parameter, fixing the toolchain for saving the final, filled PDF.
+
+3.  **Enhanced Local Heuristics**:
+    *   Based on user feedback that the tool was only finding "about half" of the fields, the `extract_fields_with_local_heuristics` tool was significantly upgraded.
+    *   The tool's logic was expanded from a simple underline-finder to a multi-strategy system that also identifies fields based on colon-terminated labels (e.g., "Name:"). This dramatically improved its coverage and accuracy.
+
+4.  **Reinforced Agent Error Handling**:
+    *   The `AUTOMATION_MANAGER_PROMPT` was updated with explicit `If-Then` logic, commanding the agent to **STOP** and report the exact error if a critical tool like `create_fields_from_blueprint` fails. This prevents the agent from getting stuck in failure loops or hallucinating successful outcomes.
+
+### Expected Result
+*   The document automation workflow is now significantly more robust and resilient.
+*   The agent can correctly create and fill PDFs without crashing due to library or file path errors.
+*   The local heuristic tool is more accurate and captures a higher percentage of form fields.
+*   The agent's error handling is more predictable and transparent to the user.
+
+---
+
 # modify the phrase with words that will produce better results as well as try other words if we do not get good results.
 # Find a way for it to look for procurement links.
+
+## [Unreleased] - 2025-06-17
+
+### Fixed
+- **Dependency Conflicts**: Resolved multiple `pip` installation errors.
+  - Corrected package name from `google-cloud-secretmanager` to `google-cloud-secret-manager` in `requirements.txt`.
+  - Upgraded `google-cloud-secret-manager` to version `2.23.3` to satisfy `google-adk` dependency requirements.
+  - Added flexible versioning for `opencv-python-headless` and `numpy` to prevent future conflicts.
+- **Form Field Detection Bugs**: Addressed several runtime `AttributeError` exceptions in the local heuristics engine (`extract_fields_with_local_heuristics`).
+  - Corrected an issue where the text content of an underscore field was used instead of its coordinates.
+  - Fixed a bug in the `merge_overlapping_rects` function by replacing a non-existent `distance_to` method with a robust intersection check, correctly merging nearby fields.
+
+### Changed
+- **Optimized Local Heuristics**: Significantly improved the performance and accuracy of the computer vision-based form field detection.
+  - Added an "early exit" to skip processing empty or sparse pages in a document.
+  - Implemented detailed debug logging (`[DEBUG-VISION]`) to provide visibility into the field extraction process.
+  - Made line detection parameters much stricter to dramatically reduce the number of false-positive fields, which was causing the LLM to hang on large documents.
+  - Added a filter to ignore very long horizontal lines that are likely page borders or dividers, not form fields.

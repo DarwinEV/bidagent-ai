@@ -2,7 +2,7 @@ from google.adk.agents.llm_agent import Agent
 from .shared_libraries import constants
 from . import prompt
 from .Bid_Discovery.agent import bid_discovery_manager
-from .document_automation_manager.agent import document_automation_manager
+from .document_processing_agent.agent import document_processing_agent
 
 
 root_agent = Agent(
@@ -12,6 +12,6 @@ root_agent = Agent(
     instruction=prompt.ORCHESTRATOR_PROMPT,
     sub_agents=[
         bid_discovery_manager,
-        document_automation_manager,
+        document_processing_agent,
     ],
 )
