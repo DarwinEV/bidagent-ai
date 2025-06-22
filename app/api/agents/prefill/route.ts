@@ -1,8 +1,9 @@
-
 import { NextRequest, NextResponse } from 'next/server'
-import { auth } from '@clerk/nextjs'
+import { auth } from '@clerk/nextjs/server'
 import { db } from '@/lib/firebase'
 import { doc, updateDoc, addDoc, collection } from 'firebase/firestore'
+
+const PREFILL_AGENT_API_URL = "http://127.0.0.1:8000"
 
 export async function POST(request: NextRequest) {
   try {
