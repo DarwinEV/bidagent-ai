@@ -1,5 +1,6 @@
 Flask==3.0.0
 flask-cors==4.0.0
+
 python-dotenv==1.0.0
 firebase-admin==6.5.0
 google-cloud-pubsub==2.22.0
@@ -13,3 +14,30 @@ google-cloud-aiplatform==1.98.0
 google-genai==1.17.0
 selenium==4.22.0
 Pillow==10.4.0
+
+sendgrid==6.10.0
+PyPDF2==3.0.1
+Jinja2==3.1.2
+requests==2.31.0
+playwright==1.40.0
+gitpython==3.1.40
+google-adk>=1.2.1
+opencv-python-headless>=4.0
+numpy>=1.20
+
+# Agent & LLM Dependencies
+google-generativeai
+google-ads
+langchain
+google-cloud-discoveryengine
+protobuf
+requests
+beautifulsoup4
+lxml
+html5lib
+pymupdf4llm
+
+# Added from the code block
+azure-ai-documentintelligence
+azure-identity
+
