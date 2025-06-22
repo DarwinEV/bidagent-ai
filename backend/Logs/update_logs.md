@@ -267,3 +267,42 @@ The agent's output shows that `doc.save(pdf_path, incremental=True)` is failing.
 -   **File to Modify:** `backend/agents/pdf_filler_manager/agent.py`
 -   **Action:** Update the list of tools assigned to the `pdf_filler_manager`.
 -   **Change:** Remove `create_text_field` and add the new `create_and_fill_field` tool.
+
+# Bid Agent Update Log - 2024-07-22
+
+## Issue: Agent fails to interact with search filters on SAM.gov
+
+The Bid Discovery agent is unable to interact with input fields on SAM.gov, preventing it from performing searches. The root cause is the brittleness of the element selectors used by the Selenium-based web browsing tools in `backend/agents/Bid_Discovery/sub_agents/search_results/agent.py`. The current implementation relies on finding elements by their `ID` or by exact text match, which is unreliable on modern web applications like SAM.gov.
+
+## Plan for Resolution
+
+To address this issue, I will enhance the web browsing tools to use more robust methods for locating and interacting with web elements.
+
+### 1. Improve Element Identification Strategy
+
+I will modify the core element finding logic to use a chain of increasingly flexible selectors. Instead of relying on a single method, the agent will try multiple strategies to find an element. The order of strategies will be:
+
+1.  Find by `ID`
+2.  Find by `name` attribute
+3.  Find by CSS Selector
+4.  Find by XPath (using more flexible queries)
+
+This will make the agent more resilient to changes in the website's structure.
+
+### 2. Enhance Existing Web Browsing Tools
+
+I will refactor the existing `enter_text_into_element` and `click_element_with_text` functions to incorporate the new element identification strategy.
+
+-   **`enter_text_into_element(selector: dict, text_to_enter: str)`**: This function will be updated to accept a dictionary specifying the selector strategy and value (e.g., `{'css': '.search-input'}`).
+
+-   **`click_element_with_text(text: str)`**: This function will be updated to use XPath's `contains()` function for partial text matches, making it less brittle.
+
+### 3. Add a New Tool for Form Interaction
+
+I will create a new tool, `enter_text_into_element_by_label(label_text: str, text_to_enter: str)`. This tool will first locate a `<label>` element containing the given `label_text` and then find the associated `input` field to enter the text into. This is a highly robust method for interacting with web forms.
+
+### 4. Improve Logging and Debugging
+
+To facilitate future debugging, I will add more detailed logging to the web browsing tools. When an element cannot be found, the agent will automatically save the current page source and a screenshot. This will provide valuable context for diagnosing issues.
+
+By implementing these changes, the Bid Discovery agent will be more capable of navigating and interacting with complex web pages, leading to a more reliable bid discovery process.
