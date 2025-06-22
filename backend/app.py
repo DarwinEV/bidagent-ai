@@ -1,18 +1,44 @@
+import sys
+print("--- Starting app.py execution ---")
+sys.stdout.flush()
+
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import os
 import json
-from backend.routes import register_routes  # TO DO: fix here to use the correct import - ERR:NO MODULE NAMED BACKEND
-from backend.config import load_config
+import logging
+from routes import register_routes
+from config import load_config
 
-app = Flask(__name__)
-CORS(app)
+# Configure logging to be verbose and output to stdout
+logging.basicConfig(stream=sys.stdout, level=logging.DEBUG, format='%(asctime)s %(levelname)s: %(message)s')
 
-# Load environment variables
-config = load_config()
+logging.info("--- Python script starting, modules imported ---")
 
-# Register ALL route blueprints
-register_routes(app)  # Ensure this is called to register all blueprints
+try:
+    logging.info("Initializing Flask app object...")
+    app = Flask(__name__)
+    logging.info("Flask app object initialized.")
+    CORS(app)
+    logging.info("CORS configured.")
+
+    # Load environment variables
+    logging.info("Loading configuration...")
+    config = load_config()
+    logging.info("Configuration loaded successfully.")
+
+    # Register ALL route blueprints
+    logging.info("Registering route blueprints...")
+    register_routes(app)
+    logging.info("Route blueprints registered successfully.")
+    
+    logging.info("--- Application setup complete, routes registered ---")
+
+except Exception as e:
+    logging.critical(f"CRITICAL ERROR during application setup: {e}", exc_info=True)
+    print(f"CRITICAL ERROR during application setup: {e}")
+    sys.stdout.flush()
+    raise
 
 @app.route('/', methods=['GET'])
 def index():
@@ -50,5 +76,6 @@ def onboard():
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
-    app.run(host='127.0.0.1', port=port, debug=config.get('FLASK_ENV') == 'development')
+    port = int(os.environ.get('PORT', 8080))
+    logging.info(f"Starting development server on http://0.0.0.0:{port}...")
+    app.run(host='0.0.0.0', port=port)
