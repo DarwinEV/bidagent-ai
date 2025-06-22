@@ -8,9 +8,22 @@ import { Mail, ExternalLink, Calendar, Clock, CheckCircle, Send } from "lucide-r
 import { useToast } from "@/hooks/use-toast"
 import axios from 'axios'
 
+interface Bid {
+  id: string;
+  title: string;
+  agency: string;
+  deadline: string;
+  prefilledPath: string;
+  submissionMethod: 'email' | 'portal';
+  submissionEmail?: string;
+  submissionPortal?: string;
+  instructions: string;
+  status: 'ready' | 'submitted';
+}
+
 export const BidSubmittingTab = () => {
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [preFilledBids, setPreFilledBids] = useState([
+  const [preFilledBids, setPreFilledBids] = useState<Bid[]>([
     {
       id: "bid-001",
       title: "HVAC Replacement for Building 42",
@@ -48,7 +61,7 @@ export const BidSubmittingTab = () => {
   ])
   const { toast } = useToast()
 
-  const handleEmailSubmission = async (bid: any) => {
+  const handleEmailSubmission = async (bid: Bid) => {
     setIsSubmitting(true)
     try {
       await axios.post('/api/agents/submit', {
