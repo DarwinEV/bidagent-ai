@@ -3,7 +3,7 @@ import { auth } from '@clerk/nextjs/server'
 import { db } from '@/lib/firebase'
 import { doc, updateDoc, addDoc, collection } from 'firebase/firestore'
 
-const PREFILL_AGENT_API_URL = "http://127.0.0.1:8000"
+const BACKEND_API_URL = process.env.BACKEND_API_URL
 
 export async function POST(request: NextRequest) {
   try {
@@ -15,34 +15,25 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { bidId, companyData } = body
 
-    // Simulate pre-filling process
-    await new Promise(resolve => setTimeout(resolve, 3000))
-
-    // Update bid status
-    const bidRef = doc(db, 'bids', bidId)
-    await updateDoc(bidRef, {
-      status: 'pre-filled',
-      preFilledAt: new Date(),
-      preFilledData: companyData,
-      preFilledPath: `/prefilled_bids/${userId}/${bidId}.pdf`
+    const response = await fetch(`${BACKEND_API_URL}/api/run_prefill_agent`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ userId, bidId, companyData }),
     })
 
-    // Log activity
-    await addDoc(collection(db, 'activities'), {
-      userId,
-      type: 'prefill',
-      message: 'Forms pre-filled successfully',
-      timestamp: new Date(),
-      bidId
-    })
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error('Prefill agent failed:', errorText)
+      throw new Error(`Prefill agent failed with status: ${response.status}`)
+    }
 
-    return NextResponse.json({ 
-      success: true,
-      message: 'Forms pre-filled successfully',
-      preFilledPath: `/prefilled_bids/${userId}/${bidId}.pdf`
-    })
+    const data = await response.json()
+    return NextResponse.json(data)
   } catch (error) {
-    console.error('Prefill error:', error)
-    return NextResponse.json({ error: 'Pre-fill failed' }, { status: 500 })
+    console.error('Error in prefill route:', error)
+    const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred'
+    return NextResponse.json({ error: 'Prefill failed', details: errorMessage }, { status: 500 })
   }
 }

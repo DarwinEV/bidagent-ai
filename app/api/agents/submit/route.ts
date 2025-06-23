@@ -3,7 +3,7 @@ import { auth } from '@clerk/nextjs/server'
 import { db } from '@/lib/firebase'
 import { doc, updateDoc, addDoc, collection } from 'firebase/firestore'
 
-const SUBMIT_AGENT_API_URL = "http://127.0.0.1:8000"
+const BACKEND_API_URL = process.env.BACKEND_API_URL
 
 export async function POST(request: NextRequest) {
   try {
@@ -15,33 +15,25 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { bidId, submissionMethod, submissionEmail } = body
 
-    // Simulate submission process
-    await new Promise(resolve => setTimeout(resolve, 2000))
-
-    // Update bid status
-    const bidRef = doc(db, 'bids', bidId)
-    await updateDoc(bidRef, {
-      status: 'submitted',
-      submittedAt: new Date(),
-      submissionMethod,
-      submissionEmail
+    const response = await fetch(`${BACKEND_API_URL}/api/run_submit_agent`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ userId, bidId, submissionMethod, submissionEmail }),
     })
 
-    // Log activity
-    await addDoc(collection(db, 'activities'), {
-      userId,
-      type: 'submission',
-      message: `Bid submitted via ${submissionMethod}`,
-      timestamp: new Date(),
-      bidId
-    })
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error('Submit agent failed:', errorText)
+      throw new Error(`Submit agent failed with status: ${response.status}`)
+    }
 
-    return NextResponse.json({ 
-      success: true,
-      message: `Bid submitted successfully via ${submissionMethod}`
-    })
+    const data = await response.json()
+    return NextResponse.json(data)
   } catch (error) {
-    console.error('Submission error:', error)
-    return NextResponse.json({ error: 'Submission failed' }, { status: 500 })
+    console.error('Error in submit route:', error)
+    const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred'
+    return NextResponse.json({ error: 'Submit failed', details: errorMessage }, { status: 500 })
   }
 }
