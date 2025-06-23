@@ -1,4 +1,3 @@
-
 'use client'
 
 import { useState } from "react"
@@ -94,14 +93,13 @@ export const IndexContent = () => {
 
           {/* Demo Video Placeholder */}
           <div className="relative max-w-4xl mx-auto">
-            <div className="aspect-video bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl shadow-2xl flex items-center justify-center">
-              <div className="text-center text-white">
-                <div className="w-20 h-20 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <div className="w-6 h-6 bg-white rounded-full"></div>
-                </div>
-                <p className="text-xl font-semibold">Product Demo Coming Soon</p>
-                <p className="text-gray-300">See BidAgents AI in action</p>
-              </div>
+            <div style={{ textAlign: 'center', margin: '2rem 0' }}>
+              <img
+                src="/bidagent-thumbnail.png"
+                alt="Video demo thumbnail"
+                style={{ maxWidth: '100%', borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}
+              />
+              <p style={{ color: '#888', marginTop: '0.5rem' }}>Video demo will be added soon!</p>
             </div>
           </div>
         </div>
