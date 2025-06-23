@@ -344,3 +344,7 @@ Systematically identify and resolve a series of cascading errors in the document
   - Implemented detailed debug logging (`[DEBUG-VISION]`) to provide visibility into the field extraction process.
   - Made line detection parameters much stricter to dramatically reduce the number of false-positive fields, which was causing the LLM to hang on large documents.
   - Added a filter to ignore very long horizontal lines that are likely page borders or dividers, not form fields.
+
+
+
+# Set up program for production on vercel
