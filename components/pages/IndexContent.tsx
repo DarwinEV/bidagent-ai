@@ -96,8 +96,7 @@ export const IndexContent = () => {
             <div className="aspect-video bg-gray-900 rounded-xl shadow-2xl overflow-hidden">
               <video
                 src="/videos/demo.mp4"
-                autoPlay
-                muted
+                controls
                 loop
                 playsInline
                 className="w-full h-full object-cover"
