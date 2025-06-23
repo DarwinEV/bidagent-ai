@@ -93,13 +93,14 @@ export const IndexContent = () => {
 
           {/* Demo Video Placeholder */}
           <div className="relative max-w-4xl mx-auto">
-            <div style={{ textAlign: 'center', margin: '2rem 0' }}>
-              <img
-                src="/bidagent-thumbnail.png"
-                alt="Video demo thumbnail"
-                style={{ maxWidth: '100%', borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}
+            <div className="aspect-video bg-gray-900 rounded-xl shadow-2xl overflow-hidden">
+              <video
+                src="/videos/demo.mp4"
+                controls
+                loop
+                playsInline
+                className="w-full h-full object-cover"
               />
-              <p style={{ color: '#888', marginTop: '0.5rem' }}>Video demo will be added soon!</p>
             </div>
           </div>
         </div>
