@@ -21,7 +21,7 @@ google-adk>=1.2.1
 selenium==4.33.0
 pillow==11.2.1
 PyMuPDF==1.24.6
-opencv-python-headless>=4.0
+opencv-python
 numpy>=1.20
 
 # Agent & LLM Dependencies
