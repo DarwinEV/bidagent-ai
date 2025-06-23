@@ -1,0 +1,5 @@
+# All files in .gitignore are ignored by default.
+#!include:.gitignore
+
+# But we want to force the inclusion of the Procfile for deployment.
+!backend/Procfile 

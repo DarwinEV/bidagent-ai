@@ -1,79 +1,46 @@
-
 import { NextRequest, NextResponse } from 'next/server'
-import { auth } from '@clerk/nextjs'
+import { auth } from '@clerk/nextjs/server'
 import { db } from '@/lib/firebase'
 import { collection, addDoc, query, where, orderBy, limit, getDocs } from 'firebase/firestore'
 
+const BACKEND_API_URL = process.env.BACKEND_API_URL;
+
 export async function POST(request: NextRequest) {
   try {
-    const { userId } = auth()
+    const { userId } = await auth()
     if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     const body = await request.json()
-    const { keywords, naicsCodes, geography, portals } = body
+    const { keywords, sourcing } = body
 
-    // Simulate discovery process
-    const mockDiscoveredBids = [
-      {
-        title: "HVAC Replacement for Building 42",
-        agency: "State University of California",
-        deadline: "2025-07-15",
-        location: "Sacramento, CA",
-        description: "Replace existing HVAC system with energy-efficient units...",
-        portal: "SAM.gov",
-        relevanceScore: 0.92,
-        status: "new",
-        userId,
-        createdAt: new Date()
+    const response = await fetch(`${BACKEND_API_URL}/api/run_discovery_agent`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
       },
-      {
-        title: "Plumbing Maintenance Services",
-        agency: "City of San Francisco",
-        deadline: "2025-06-30",
-        location: "San Francisco, CA",
-        description: "Annual plumbing maintenance for municipal buildings...",
-        portal: "CA State Portal",
-        relevanceScore: 0.87,
-        status: "new",
-        userId,
-        createdAt: new Date()
-      }
-    ]
+      body: JSON.stringify({ userId, keywords, sourcing }),
+    });
 
-    // Store in Firestore
-    const bidsCollection = collection(db, 'bids')
-    const savedBids = []
-
-    for (const bid of mockDiscoveredBids) {
-      const docRef = await addDoc(bidsCollection, bid)
-      savedBids.push({ id: docRef.id, ...bid })
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("Discovery agent failed:", errorText);
+      throw new Error(`Discovery agent failed with status: ${response.status}`);
     }
 
-    // Log activity
-    await addDoc(collection(db, 'activities'), {
-      userId,
-      type: 'discovery',
-      message: `Found ${savedBids.length} new opportunities`,
-      timestamp: new Date(),
-      details: { keywords, naicsCodes, geography, portals }
-    })
-
-    return NextResponse.json({ 
-      success: true, 
-      bids: savedBids,
-      message: `Discovery complete. Found ${savedBids.length} opportunities.`
-    })
+    const data = await response.json();
+    return NextResponse.json(data);
   } catch (error) {
-    console.error('Discovery error:', error)
-    return NextResponse.json({ error: 'Discovery failed' }, { status: 500 })
+    console.error("Error in discovery route:", error);
+    const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
+    return NextResponse.json({ error: "Discovery failed", details: errorMessage }, { status: 500 });
   }
 }
 
 export async function GET(request: NextRequest) {
   try {
-    const { userId } = auth()
+    const { userId } = await auth()
     if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }

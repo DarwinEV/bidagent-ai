@@ -1,4 +1,3 @@
-
 'use client'
 
 import { useState } from "react"
@@ -12,11 +11,18 @@ import { FileText, Edit, Download, Save, RefreshCw } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import axios from 'axios'
 
+interface FormField {
+  id: string;
+  label: string;
+  value: string;
+  required: boolean;
+}
+
 export const BidFillingTab = () => {
   const [selectedBid, setSelectedBid] = useState("")
   const [isFilling, setIsFilling] = useState(false)
   const [showPDFInterface, setShowPDFInterface] = useState(false)
-  const [formFields, setFormFields] = useState([
+  const [formFields, setFormFields] = useState<FormField[]>([
     { id: "companyName", label: "Company Name", value: "Acme Contractors, LLC", required: true },
     { id: "address", label: "Business Address", value: "123 Main St, Sacramento, CA 95814", required: true },
     { id: "contactName", label: "Primary Contact", value: "Sarah Johnson", required: true },
@@ -72,7 +78,7 @@ export const BidFillingTab = () => {
     }
   }
 
-  const handlePDFSave = (fields: any[]) => {
+  const handlePDFSave = (fields: FormField[]) => {
     toast({
       title: "PDF Saved!",
       description: "Your pre-filled PDF has been saved successfully.",

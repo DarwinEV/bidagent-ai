@@ -8,6 +8,7 @@ import time
 import warnings
 import asyncio
 import uuid
+import io
 
 import selenium
 from google.adk.agents.llm_agent import Agent
@@ -17,6 +18,9 @@ from google.genai import types
 from PIL import Image
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.remote.webelement import WebElement
+from selenium.common.exceptions import NoSuchElementException, ElementNotInteractableException, ElementClickInterceptedException
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
 from google.adk.artifacts import InMemoryArtifactService
@@ -69,11 +73,13 @@ def get_driver():
     global driver
     if driver is None and not constants.DISABLE_WEB_DRIVER:
         print("🚀 Initializing new Chrome WebDriver instance...")
-    options = Options()
-    options.add_argument("--window-size=1920x1080")
-    options.add_argument("--verbose")
-    options.add_argument("user-data-dir=/tmp/selenium")
-    driver = selenium.webdriver.Chrome(options=options)
+        options = Options()
+        options.add_argument("--window-size=1920x1080")
+        options.add_argument("--verbose")
+        # Use a unique user data directory to prevent session conflicts
+        user_data_dir = f"/tmp/selenium_{uuid.uuid4()}"
+        options.add_argument(f"user-data-dir={user_data_dir}")
+        driver = selenium.webdriver.Chrome(options=options)
     return driver
 
 
@@ -97,14 +103,42 @@ async def take_screenshot(tool_context: ToolContext) -> dict:
         return {"status": "error", "message": "WebDriver is disabled."}
     local_driver.save_screenshot(filename)
 
+    # Save page source for debugging
+    page_source_filename = f"page_source_{timestamp}.html"
+    with open(page_source_filename, "w", encoding="utf-8") as f:
+        f.write(local_driver.page_source)
+    print(f"📄 Page source saved as: {page_source_filename}")
+
     image = Image.open(filename)
 
-    await tool_context.save_artifact(
+    # Correctly encode the image to PNG bytes
+    img_byte_arr = io.BytesIO()
+    image.save(img_byte_arr, format='PNG')
+    img_bytes = img_byte_arr.getvalue()
+
+    tool_context.save_artifact(
         filename,
-        types.Part.from_bytes(data=image.tobytes(), mime_type="image/png"),
+        types.Part.from_bytes(data=img_bytes, mime_type="image/png"),
     )
 
     return {"status": "ok", "filename": filename}
+
+
+def _find_element(driver, selector: dict) -> WebElement | None:
+    """Tries to find an element using a chain of robust selectors."""
+    strategies = [
+        (By.ID, selector.get("id")),
+        (By.NAME, selector.get("name")),
+        (By.CSS_SELECTOR, selector.get("css")),
+        (By.XPATH, selector.get("xpath")),
+    ]
+    for by, value in strategies:
+        if value:
+            try:
+                return driver.find_element(by, value)
+            except NoSuchElementException:
+                continue
+    return None
 
 
 def click_at_coordinates(x: int, y: int) -> str:
@@ -124,14 +158,14 @@ def find_element_with_text(text: str) -> str:
     if not local_driver:
         return "WebDriver is disabled."
     try:
-        element = local_driver.find_element(By.XPATH, f"//*[text()='{text}']")
+        element = local_driver.find_element(By.XPATH, f"//*[contains(text(), '{text}')]")
         if element:
             return "Element found."
         else:
             return "Element not found."
-    except selenium.common.exceptions.NoSuchElementException:
+    except NoSuchElementException:
         return "Element not found."
-    except selenium.common.exceptions.ElementNotInteractableException:
+    except ElementNotInteractableException:
         return "Element not interactable, cannot click."
 
 
@@ -142,35 +176,67 @@ def click_element_with_text(text: str) -> str:
     if not local_driver:
         return "WebDriver is disabled."
     try:
-        element = local_driver.find_element(By.XPATH, f"//*[text()='{text}']")
+        element = local_driver.find_element(By.XPATH, f"//*[contains(text(), '{text}')]")
         element.click()
         return f"Clicked element with text: {text}"
-    except selenium.common.exceptions.NoSuchElementException:
+    except NoSuchElementException:
         return "Element not found, cannot click."
-    except selenium.common.exceptions.ElementNotInteractableException:
+    except ElementNotInteractableException:
         return "Element not interactable, cannot click."
-    except selenium.common.exceptions.ElementClickInterceptedException:
+    except ElementClickInterceptedException:
         return "Element click intercepted, cannot click."
 
 
-def enter_text_into_element(text_to_enter: str, element_id: str) -> str:
-    """Enters text into an element with the given ID."""
+def enter_text_into_element(text_to_enter: str, selector: dict, press_enter_after: bool = False) -> str:
+    """Enters text into an element found by the given selector, optionally pressing Enter."""
     print(
-        f"📝 Entering text '{text_to_enter}' into element with ID: {element_id}"
-    )  # Added print statement
+        f"📝 Entering text '{text_to_enter}' into element found by: {selector}"
+    )
+    local_driver = get_driver()
+    if not local_driver:
+        return "WebDriver is disabled."
+
+    element = _find_element(local_driver, selector)
+    if element:
+        try:
+            text_to_send = text_to_enter
+            if press_enter_after:
+                text_to_send += Keys.RETURN
+            element.send_keys(text_to_send)
+            
+            message = f"Entered text '{text_to_enter}' into element found by {selector}"
+            if press_enter_after:
+                message += " and pressed Enter."
+            return message
+        except ElementNotInteractableException:
+            return "Element not interactable, cannot enter text."
+    else:
+        return f"Element not found with selector: {selector}"
+
+
+def enter_text_into_element_by_label(label_text: str, text_to_enter: str) -> str:
+    """Finds an input field by its label text and enters text into it."""
+    print(f"📝 Entering text '{text_to_enter}' into field labeled '{label_text}'")
     local_driver = get_driver()
     if not local_driver:
         return "WebDriver is disabled."
     try:
-        input_element = local_driver.find_element(By.ID, element_id)
-        input_element.send_keys(text_to_enter)
-        return (
-            f"Entered text '{text_to_enter}' into element with ID: {element_id}"
-        )
-    except selenium.common.exceptions.NoSuchElementException:
-        return "Element with given ID not found."
-    except selenium.common.exceptions.ElementNotInteractableException:
-        return "Element not interactable, cannot click."
+        # Find the label element
+        label_element = local_driver.find_element(By.XPATH, f"//label[contains(., '{label_text}')]")
+        
+        # Get the 'for' attribute to find the associated input
+        input_id = label_element.get_attribute('for')
+        if input_id:
+            input_element = local_driver.find_element(By.ID, input_id)
+            input_element.send_keys(text_to_enter)
+            return f"Entered text '{text_to_enter}' into field with ID '{input_id}' (labeled '{label_text}')."
+        else:
+            return f"Label '{label_text}' found, but it has no 'for' attribute."
+
+    except NoSuchElementException:
+        return f"Could not find a label containing the text '{label_text}' or its associated input field."
+    except ElementNotInteractableException:
+        return f"Input field for label '{label_text}' is not interactable."
 
 
 def scroll_down_screen() -> str:
@@ -224,7 +290,8 @@ def analyze_webpage_and_determine_action(
     - "COMPLETE_PAGE_SOURCE": If source code appears to be incomplete, complte it to make it valid html
     - "SCROLL_DOWN": If more content needs to be loaded by scrolling.
     - "CLICK: <element_text>": If a specific element with text <element_text> should be clicked. Replace <element_text> with the actual text of the element.
-    - "ENTER_TEXT: <element_id>, <text_to_enter>": If text needs to be entered into an input field. Replace <element_id> with the ID of the input element and <text_to_enter> with the text to enter.
+    - "ENTER_TEXT: <selector_json>, <text_to_enter>, <press_enter>": If text needs to be entered into an input field. Replace <selector_json> with a JSON object like {"id": "search_box_id"}, <text_to_enter> with the text, and <press_enter> with true or false.
+    - "ENTER_TEXT_BY_LABEL: <label_text>, <text_to_enter>": If text needs to be entered into an input field identified by its label.
     - "TASK_COMPLETED": If you believe the user's task is likely completed on this page.
     - "STUCK": If you are unsure what to do next or cannot progress further.
     - "ASK_USER": If you need clarification from the user on what to do next.
@@ -235,7 +302,9 @@ def analyze_webpage_and_determine_action(
     Example Responses:
     - SCROLL_DOWN
     - CLICK: Learn more
-    - ENTER_TEXT: search_box_id, Gemini API
+    - ENTER_TEXT: {"id": "search_box_id"}, Gemini API, false
+    - ENTER_TEXT: {"name": "keyword-text"}, New Jersey, true
+    - ENTER_TEXT_BY_LABEL: Username, my_user_name
     - TASK_COMPLETED
     - STUCK
     - ASK_USER
@@ -255,9 +324,11 @@ bid_search_agent = BidSearchAgent(
     tools=[
         go_to_url,
         take_screenshot,
+        click_at_coordinates,
         find_element_with_text,
         click_element_with_text,
         enter_text_into_element,
+        enter_text_into_element_by_label,
         scroll_down_screen,
         get_page_source,
         load_artifacts_tool,

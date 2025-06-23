@@ -1,11 +1,12 @@
-Flask[async]==2.3.3
+Flask==3.0.0
 flask-cors==4.0.0
-python-dotenv==1.0.1
+
+python-dotenv==1.0.0
 firebase-admin==6.5.0
 google-cloud-pubsub==2.22.0
-google-cloud-storage==2.19.0
-google-cloud-firestore==2.13.1
-google-cloud-secret-manager==2.23.3
+google-cloud-storage==2.18.0
+google-cloud-firestore==2.17.1
+google-cloud-secret-manager==2.22.0
 google-cloud-documentai==2.29.1
 sendgrid==6.10.0
 PyPDF2==3.0.1
@@ -22,7 +23,6 @@ pillow==11.2.1
 PyMuPDF==1.24.6
 opencv-python-headless>=4.0
 numpy>=1.20
-opencv-python-headless
 
 # Agent & LLM Dependencies
 google-generativeai
