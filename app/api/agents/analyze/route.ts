@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
-import { db } from '@/lib/firebase'
-import { doc, updateDoc, addDoc, collection } from 'firebase/firestore'
+
+const BACKEND_API_URL = process.env.BACKEND_API_URL;
 
 export async function POST(request: NextRequest) {
   try {
@@ -13,38 +13,29 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { bidId } = body
 
-    // Simulate document analysis
-    await new Promise(resolve => setTimeout(resolve, 2000))
+    if (!bidId) {
+      return NextResponse.json({ error: 'Missing bidId' }, { status: 400 })
+    }
 
-    // Update bid status
-    const bidRef = doc(db, 'bids', bidId)
-    await updateDoc(bidRef, {
-      status: 'analyzed',
-      analyzedAt: new Date(),
-      requirements: {
-        deadline: '2025-07-15',
-        bondRequired: true,
-        insuranceRequired: true,
-        licenseRequired: true,
-        estimatedValue: '$125,000'
-      }
-    })
+    const response = await fetch(`${BACKEND_API_URL}/api/run_analysis_agent`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ bidId, userId }),
+    });
 
-    // Log activity
-    await addDoc(collection(db, 'activities'), {
-      userId,
-      type: 'analysis',
-      message: 'Document analysis completed',
-      timestamp: new Date(),
-      bidId
-    })
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("Analysis agent failed:", errorText);
+      throw new Error(`Analysis agent failed with status: ${response.status}`);
+    }
 
-    return NextResponse.json({ 
-      success: true,
-      message: 'Document analysis completed successfully'
-    })
+    const data = await response.json();
+    return NextResponse.json(data);
   } catch (error) {
-    console.error('Analysis error:', error)
-    return NextResponse.json({ error: 'Analysis failed' }, { status: 500 })
+    console.error('Error in analysis route:', error)
+    const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
+    return NextResponse.json({ error: 'Analysis failed', details: errorMessage }, { status: 500 })
   }
 }
